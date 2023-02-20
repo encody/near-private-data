@@ -5,7 +5,6 @@ name = "near-private-data-public-key-manager-contract"
 version = "0.1.0"
 
 [dependencies]
-near-contract-standards = "4.1.1"
 near-sdk = "4.1.1"
 near-sdk-contract-tools = "0.7.2"
 

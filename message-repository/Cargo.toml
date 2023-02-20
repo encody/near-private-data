@@ -5,9 +5,10 @@ name = "near-private-data-message-repository-contract"
 version = "0.1.0"
 
 [dependencies]
-near-contract-standards = "4.1.1"
+cuckoofilter = "0.5.0"
 near-sdk = "4.1.1"
 near-sdk-contract-tools = "0.7.2"
+siphasher = "0.3.10"
 
 [lib]
 crate-type = ["cdylib"]
