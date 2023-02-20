@@ -777,7 +777,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "near-private-data-public-key-repository-contract"
+name = "near-private-data-message-repository-contract"
+version = "0.1.0"
+dependencies = [
+ "near-contract-standards",
+ "near-sdk",
+ "near-sdk-contract-tools",
+]
+
+[[package]]
+name = "near-private-data-public-key-manager-contract"
 version = "0.1.0"
 dependencies = [
  "near-contract-standards",

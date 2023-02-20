@@ -1,0 +1,21 @@
+[package]
+authors = ["Jacob Lindahl <jacob.lindahl@near.org>"]
+edition = "2021"
+name = "near-private-data-public-key-manager-contract"
+version = "0.1.0"
+
+[dependencies]
+near-contract-standards = "4.1.1"
+near-sdk = "4.1.1"
+near-sdk-contract-tools = "0.7.2"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+codegen-units = 1
+debug = false
+lto = true
+opt-level = "z"
+overflow-checks = true
+panic = "abort"

@@ -13,11 +13,11 @@ enum StorageKey {
 }
 
 #[event(
-    standard = "x-public-key-repository",
+    standard = "x-public-key-manager",
     version = "1.0.0",
     serde = "near_sdk::serde"
 )]
-enum PublicKeyRepositoryEvent {
+enum PublicKeyManagerEvent {
     PublicKeyChange {
         account_id: AccountId,
         public_key: Option<String>,
@@ -26,12 +26,12 @@ enum PublicKeyRepositoryEvent {
 
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]
-pub struct PublicKeyRepositoryContract {
+pub struct PublicKeyManagerContract {
     key_map: LookupMap<AccountId, String>,
 }
 
 #[near_bindgen]
-impl PublicKeyRepositoryContract {
+impl PublicKeyManagerContract {
     #[init]
     pub fn new() -> Self {
         Self {
@@ -52,7 +52,7 @@ impl PublicKeyRepositoryContract {
             .set(env::predecessor_account_id(), public_key.clone());
         self.key_map.flush();
 
-        PublicKeyRepositoryEvent::PublicKeyChange {
+        PublicKeyManagerEvent::PublicKeyChange {
             account_id: env::predecessor_account_id(),
             public_key,
         }
