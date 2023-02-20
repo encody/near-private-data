@@ -777,6 +777,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "near-private-data-public-key-repository-contract"
+version = "0.1.0"
+dependencies = [
+ "near-contract-standards",
+ "near-sdk",
+ "near-sdk-contract-tools",
+]
+
+[[package]]
 name = "near-rpc-error-core"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -862,15 +871,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "near-smart-contract-rust-template"
-version = "0.1.0"
-dependencies = [
- "near-contract-standards",
- "near-sdk",
- "near-sdk-contract-tools",
 ]
 
 [[package]]
