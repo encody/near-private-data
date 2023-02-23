@@ -25,7 +25,7 @@ script = """
 #!/usr/bin/env bash
 
 set -e
-WASM_PATH="$(find ./target/wasm32-unknown-unknown/release -maxdepth 1 -name "*.wasm")"
+WASM_PATH="../target/wasm32-unknown-unknown/release/near_private_data_public_key_registry_contract.wasm"
 
 near deploy \
   --wasmFile $WASM_PATH \
@@ -40,7 +40,7 @@ script = """
 #!/usr/bin/env bash
 
 set -e
-WASM_PATH="$(find ./target/wasm32-unknown-unknown/release -maxdepth 1 -name "*.wasm")"
+WASM_PATH="../target/wasm32-unknown-unknown/release/near_private_data_public_key_registry_contract.wasm"
 
 near dev-deploy \
   --wasmFile $WASM_PATH \

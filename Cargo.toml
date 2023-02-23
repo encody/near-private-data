@@ -1,6 +1,6 @@
 [workspace]
 members = [
   "./client",
-  "./key-manager",
+  "./key-registry",
   "./message-repository",
 ]

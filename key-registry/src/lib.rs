@@ -1,6 +1,8 @@
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env, near_bindgen,
+    env,
+    json_types::Base64VecU8,
+    near_bindgen, require,
     store::LookupMap,
     AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue,
 };
@@ -20,14 +22,14 @@ enum StorageKey {
 enum PublicKeyManagerEvent {
     PublicKeyChange {
         account_id: AccountId,
-        public_key: Option<String>,
+        public_key: Option<Base64VecU8>,
     },
 }
 
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]
 pub struct PublicKeyManagerContract {
-    key_map: LookupMap<AccountId, String>,
+    key_map: LookupMap<AccountId, Base64VecU8>,
 }
 
 #[near_bindgen]
@@ -39,13 +41,13 @@ impl PublicKeyManagerContract {
         }
     }
 
-    pub fn get_public_key(&self, account_id: AccountId) -> Option<&String> {
+    pub fn get_public_key(&self, account_id: AccountId) -> Option<&Base64VecU8> {
         self.key_map.get(&account_id)
     }
 
     #[payable]
-    pub fn set_public_key(&mut self, public_key: Option<String>) -> PromiseOrValue<()> {
-        near_sdk::assert_one_yocto();
+    pub fn set_public_key(&mut self, public_key: Option<Base64VecU8>) -> PromiseOrValue<()> {
+        require!(env::attached_deposit() > 0, "Requires deposit");
         let initial_storage_usage = env::storage_usage();
 
         self.key_map

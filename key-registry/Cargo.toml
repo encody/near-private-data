@@ -1,7 +1,7 @@
 [package]
 authors = ["Jacob Lindahl <jacob.lindahl@near.org>"]
 edition = "2021"
-name = "near-private-data-public-key-manager-contract"
+name = "near-private-data-public-key-registry-contract"
 version = "0.1.0"
 
 [dependencies]
