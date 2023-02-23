@@ -65,11 +65,11 @@ fn public_key_to_string(public_key: &ed25519_dalek::PublicKey) -> String {
     Base64::encode_string(public_key.as_bytes())
 }
 
-fn public_key_from_string(s: &str) -> Option<ed25519_dalek::PublicKey> {
-    Base64::decode_vec(s)
-        .ok()
-        .and_then(|bytes| ed25519_dalek::PublicKey::from_bytes(&bytes).ok())
-}
+// fn public_key_from_string(s: &str) -> Option<ed25519_dalek::PublicKey> {
+//     Base64::decode_vec(s)
+//         .ok()
+//         .and_then(|bytes| ed25519_dalek::PublicKey::from_bytes(&bytes).ok())
+// }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

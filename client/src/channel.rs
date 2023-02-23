@@ -53,7 +53,7 @@ impl Channel {
         let send_channel = Self {
             sender_id: sender_public_key.to_bytes().into(),
             receiver_id: receiver_public_key.to_bytes().into(),
-            shared_secret: shared_secret.clone(),
+            shared_secret,
         };
         let receive_channel = Self {
             sender_id: receiver_public_key.to_bytes().into(),
@@ -69,7 +69,7 @@ impl Channel {
             .chain_update(sequence_number.to_le_bytes())
             .chain_update(&self.sender_id)
             .chain_update(&self.receiver_id)
-            .chain_update(&self.shared_secret)
+            .chain_update(self.shared_secret)
             .finalize()
             .into();
 
