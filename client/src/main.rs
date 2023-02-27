@@ -1,25 +1,18 @@
 use std::path::PathBuf;
 
-use anyhow::{anyhow, bail};
 use base64ct::{Base64, Encoding};
 use ed25519_dalek::Keypair;
-use near_crypto::Signer;
-use near_jsonrpc_client::{methods, JsonRpcClient, NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
-use near_jsonrpc_primitives::types::query::QueryResponseKind;
-use near_primitives::{
-    hash::CryptoHash,
-    transaction::FunctionCallAction,
-    types::{AccountId, BlockReference, Finality},
-    views::{AccessKeyView, QueryRequest},
-};
+
+use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
+use near_primitives::{transaction::FunctionCallAction, types::AccountId};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-pub mod channel;
+use crate::wallet::{Wallet, ONE_NEAR, ONE_TERAGAS};
 
-const ONE_TERAGAS: u64 = 10u64.pow(12);
-const ONE_NEAR: u128 = 10u128.pow(24);
+pub mod channel;
+pub mod wallet;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Environment {
@@ -36,29 +29,6 @@ fn network_rpc_url(network: Option<String>) -> String {
             _ => network, // assume it's a URL
         })
         .unwrap_or_else(|| NEAR_TESTNET_RPC_URL.to_string())
-}
-
-async fn get_current_nonce(
-    client: &near_jsonrpc_client::JsonRpcClient,
-    account_id: AccountId,
-    public_key: near_crypto::PublicKey,
-) -> anyhow::Result<(u64, CryptoHash)> {
-    let response = client
-        .call(methods::query::RpcQueryRequest {
-            block_reference: BlockReference::latest(),
-            request: QueryRequest::ViewAccessKey {
-                account_id,
-                public_key,
-            },
-        })
-        .await?;
-
-    match response.kind {
-        QueryResponseKind::AccessKey(AccessKeyView { nonce, .. }) => {
-            Ok((nonce, response.block_hash))
-        }
-        _ => Err(anyhow!("Invalid response from RPC")),
-    }
 }
 
 fn public_key_to_string(public_key: &ed25519_dalek::PublicKey) -> String {
@@ -79,10 +49,11 @@ async fn main() -> anyhow::Result<()> {
 
     let signer = near_crypto::InMemorySigner::from_file(&env.key_file_path)?;
 
-    let client = JsonRpcClient::connect(network_rpc_url(env.network));
-
-    let (current_nonce, block_hash) =
-        get_current_nonce(&client, signer.account_id.clone(), signer.public_key()).await?;
+    let wallet = Wallet::new(
+        network_rpc_url(env.network.clone()),
+        signer.account_id.clone(),
+        signer,
+    );
 
     let mut rng = OsRng;
 
@@ -92,51 +63,31 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Generated key: {public_key_string}");
 
-    let transaction = near_primitives::transaction::Transaction {
-        nonce: current_nonce + 1,
-        block_hash,
-        public_key: signer.public_key(),
-        signer_id: signer.account_id.clone(),
-        receiver_id: env.key_registry_account_id.clone(),
-        actions: vec![near_primitives::transaction::Action::FunctionCall(
-            FunctionCallAction {
-                method_name: "set_public_key".to_string(),
-                args: json!({
-                    "public_key": public_key_string,
-                })
-                .to_string()
-                .into_bytes(),
-                gas: 3 * ONE_TERAGAS,
-                deposit: ONE_NEAR >> 1,
-            },
-        )],
-    };
-
-    let signed_transaction = transaction.sign(&signer);
-
-    client
-        .call(methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest { signed_transaction })
+    wallet
+        .transact(
+            env.key_registry_account_id.clone(),
+            vec![near_primitives::transaction::Action::FunctionCall(
+                FunctionCallAction {
+                    method_name: "set_public_key".to_string(),
+                    args: json!({
+                        "public_key": public_key_string,
+                    })
+                    .to_string()
+                    .into_bytes(),
+                    gas: 3 * ONE_TERAGAS,
+                    deposit: ONE_NEAR >> 1,
+                },
+            )],
+        )
         .await?;
 
-    let response = client
-        .call(methods::query::RpcQueryRequest {
-            block_reference: BlockReference::Finality(Finality::Final),
-            request: QueryRequest::CallFunction {
-                account_id: env.key_registry_account_id.clone(),
-                method_name: "get_public_key".to_string(),
-                args: json!({"account_id": signer.account_id.clone()})
-                    .to_string()
-                    .into_bytes()
-                    .into(),
-            },
-        })
-        .await
-        .unwrap();
-
-    let response = match response.kind {
-        QueryResponseKind::CallResult(r) => serde_json::from_slice::<String>(&r.result)?,
-        _ => bail!("Wrong response: {response:?}"),
-    };
+    let response: String = wallet
+        .view(
+            env.key_registry_account_id.clone(),
+            "get_public_key",
+            json!({"account_id": &wallet.account_id}),
+        )
+        .await?;
 
     println!("Response from contract: {response}");
 
