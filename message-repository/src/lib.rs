@@ -45,6 +45,7 @@ pub struct AggregatorRecord {
 pub struct MessageRepository {
     messages: LookupMap<Vec<u8>, Vec<u8>>,
     aggregator_history: Vector<AggregatorRecord>,
+    aggregator_storage_usage: u64,
 }
 
 fn new_aggregator() -> Aggregator {
@@ -64,9 +65,16 @@ fn write<T: BorshSerialize>(key: impl IntoStorageKey, value: T) {
 impl MessageRepository {
     #[init]
     pub fn new() -> Self {
-        write(StorageKey::CurrentAggregator, new_aggregator());
+        let aggregator_storage_usage = {
+            let start_usage = env::storage_usage();
+            write(StorageKey::CurrentAggregator, new_aggregator());
+            let end_usage = env::storage_usage();
+            end_usage - start_usage // should never underflow if everything is working properly
+        };
+
         Self {
             messages: LookupMap::new(StorageKey::Messages),
+            aggregator_storage_usage,
             aggregator_history: Vector::new(StorageKey::AggregatorHistory),
         }
     }
@@ -133,13 +141,28 @@ impl MessageRepository {
         // outside of storage usage calculation so that users aren't charged when a new aggregator is created
         self.add_to_current_aggregator(&sequence_hash.0);
 
+        let item_aggregator_fee = {
+            let aggregator_storage_cost =
+                self.aggregator_storage_usage as u128 * env::storage_byte_cost();
+            let single_item_storage_cost = aggregator_storage_cost / AGGREGATOR_CAPACITY as u128;
+            let remainder = aggregator_storage_cost % AGGREGATOR_CAPACITY as u128;
+            if remainder > 0 {
+                single_item_storage_cost + 1
+            } else {
+                single_item_storage_cost
+            }
+        };
+
         let initial_storage_usage = env::storage_usage();
 
         self.messages.insert(sequence_hash.0.clone(), message.0);
 
         ContractEvent::Publish { sequence_hash }.emit();
 
-        near_sdk_contract_tools::utils::apply_storage_fee_and_refund(initial_storage_usage, 0)
-            .map_or(PromiseOrValue::Value(()), |p| p.into())
+        near_sdk_contract_tools::utils::apply_storage_fee_and_refund(
+            initial_storage_usage,
+            item_aggregator_fee,
+        )
+        .map_or(PromiseOrValue::Value(()), |p| p.into())
     }
 }
