@@ -24,6 +24,24 @@ Then you can run `cargo run` from the `client/` directory and it should perform 
 
 Currently there is not much of a user-friendly interface, and it is not interactive. Those features are _Coming Soon_&trade;.
 
+A successful execution of the demo looks like this:
+
+```text
+Setting my key in registry...Done.
+Retrieving my key from registry...Done.
+Response from contract: xM8lTphEVH/eMlFgp8eyLX/rffWTb9mIpU/cBrCm9FM=
+Key is correct.
+Setting second account key in registry...Done.
+Message sequence hash: EBxL4ZSaVuKxpZYawrRs/mjhCCW279Dyv0w2rkDuTaE=
+Publishing message (first -> second) to message repository...Done.
+Message sequence hash: EBxL4ZSaVuKxpZYawrRs/mjhCCW279Dyv0w2rkDuTaE=
+Retrieving message from message repository...Done.
+Decrypting...Done.
+Testing equality...Done.
+```
+
+Note: this was accurate at time of writing, but this project is still very early and in development, so this document may not always be in sync with the latest changes.
+
 # Authors
 
 - Jacob Lindahl <jacob.lindahl@near.org> [@sudo_build](https://twitter.com/sudo_build)
