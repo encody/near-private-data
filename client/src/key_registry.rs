@@ -5,7 +5,7 @@ use serde_json::json;
 
 use crate::wallet::{Wallet, ONE_NEAR, ONE_TERAGAS};
 
-fn public_key_to_string(public_key: &ed25519_dalek::PublicKey) -> String {
+fn public_key_to_string(public_key: &x25519_dalek::PublicKey) -> String {
     Base64::encode_string(public_key.as_bytes())
 }
 
@@ -15,8 +15,11 @@ pub struct KeyRegistry<'a> {
 }
 
 impl<'a> KeyRegistry<'a> {
-    pub fn new(wallet: &'a Wallet, account_id: AccountId) -> Self {
-        Self { wallet, account_id }
+    pub fn new(wallet: &'a Wallet, account_id: &'_ AccountId) -> Self {
+        Self {
+            wallet,
+            account_id: account_id.clone(),
+        }
     }
 
     pub async fn get_my_key(&self) -> anyhow::Result<Vec<u8>> {
@@ -35,13 +38,13 @@ impl<'a> KeyRegistry<'a> {
 
         let response = match Base64::decode_vec(&response) {
             Ok(v) => v,
-            Err(e) => bail!(e),
+            Err(e) => bail!("Could not decode: {}", e),
         };
 
         Ok(response)
     }
 
-    pub async fn set_my_key(&self, public_key: &ed25519_dalek::PublicKey) -> anyhow::Result<()> {
+    pub async fn set_my_key(&self, public_key: &x25519_dalek::PublicKey) -> anyhow::Result<()> {
         self.wallet
             .transact(
                 self.account_id.clone(),

@@ -14,8 +14,11 @@ pub struct MessageRepository<'a> {
 }
 
 impl<'a> MessageRepository<'a> {
-    pub fn new(wallet: &'a Wallet, account_id: AccountId) -> Self {
-        Self { wallet, account_id }
+    pub fn new(wallet: &'a Wallet, account_id: &'_ AccountId) -> Self {
+        Self {
+            wallet,
+            account_id: account_id.clone(),
+        }
     }
 
     pub async fn get_message(&self, sequence_hash: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -23,7 +26,7 @@ impl<'a> MessageRepository<'a> {
             .wallet
             .view::<Option<String>>(
                 self.account_id.clone(),
-                "",
+                "get_message",
                 json!({ "sequence_hash": Base64::encode_string(sequence_hash) }),
             )
             .await?;
@@ -46,21 +49,23 @@ impl<'a> MessageRepository<'a> {
         sequence_hash: &[u8],
         message: &[u8],
     ) -> anyhow::Result<()> {
-        self.wallet.transact(
-            self.account_id.clone(),
-            vec![Action::FunctionCall(FunctionCallAction {
-                method_name: "publish".to_string(),
-                args: json!({
-                    "sequence_hash": Base64::encode_string(sequence_hash),
-                    "message": Base64::encode_string(message),
-                })
-                .to_string()
-                .into_bytes()
-                .into(),
-                gas: 300 * ONE_TERAGAS,
-                deposit: ONE_NEAR,
-            })],
-        ).await?;
+        self.wallet
+            .transact(
+                self.account_id.clone(),
+                vec![Action::FunctionCall(FunctionCallAction {
+                    method_name: "publish".to_string(),
+                    args: json!({
+                        "sequence_hash": Base64::encode_string(sequence_hash),
+                        "message": Base64::encode_string(message),
+                    })
+                    .to_string()
+                    .into_bytes()
+                    .into(),
+                    gas: 300 * ONE_TERAGAS,
+                    deposit: ONE_NEAR,
+                })],
+            )
+            .await?;
 
         Ok(())
     }
