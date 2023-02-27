@@ -1,5 +1,10 @@
 use std::ops::Deref;
 
+use anyhow::bail;
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    ChaCha20Poly1305, Nonce,
+};
 use sha2::{Digest, Sha256};
 
 pub type SequenceNumber = u32;
@@ -75,6 +80,30 @@ impl Channel {
 
         hash_bytes.into()
     }
+
+    pub fn encrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let cipher = ChaCha20Poly1305::new_from_slice(&self.shared_secret)?;
+        let nonce = u32_to_nonce(nonce);
+        let ciphertext = match cipher.encrypt(&nonce, message) {
+            Ok(c) => c,
+            Err(e) => bail!(e),
+        };
+        Ok(ciphertext)
+    }
+
+    pub fn decrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let cipher = ChaCha20Poly1305::new_from_slice(&self.shared_secret)?;
+        let nonce = u32_to_nonce(nonce);
+        let cleartext = match cipher.decrypt(&nonce, message) {
+            Ok(c) => c,
+            Err(e) => bail!(e),
+        };
+        Ok(cleartext)
+    }
+}
+
+fn u32_to_nonce(u: u32) -> Nonce {
+    Nonce::from_exact_iter([u.to_le_bytes(), [0u8; 4], [0u8; 4]].concat().into_iter()).unwrap()
 }
 
 #[cfg(test)]
@@ -84,7 +113,37 @@ mod tests {
     use super::Channel;
 
     #[test]
-    fn test() {
+    fn encryption_decryption() -> anyhow::Result<()> {
+        let mut rng = OsRng;
+
+        let alice = x25519_dalek::StaticSecret::new(&mut rng);
+        let bob = x25519_dalek::StaticSecret::new(&mut rng);
+
+        let alice_pub = x25519_dalek::PublicKey::from(&alice);
+        let bob_pub = x25519_dalek::PublicKey::from(&bob);
+
+        let (alice_send, alice_recv) = Channel::pair(&alice, &bob_pub);
+        let (bob_send, bob_recv) = Channel::pair(&bob, &alice_pub);
+
+        let cleartext = b"hello, world";
+
+        let alice_sends_ciphertext = alice_send.encrypt(0, cleartext)?;
+        let bob_receives_cleartext = bob_recv.decrypt(0, &alice_sends_ciphertext)?;
+
+        assert_eq!(&bob_receives_cleartext, cleartext);
+
+        let cleartext = b"once upon a time";
+
+        let bob_sends_ciphertext = bob_send.encrypt(1, cleartext)?;
+        let alice_receives_cleartext = alice_recv.decrypt(1, &bob_sends_ciphertext)?;
+
+        assert_eq!(&alice_receives_cleartext, cleartext);
+
+        Ok(())
+    }
+
+    #[test]
+    fn sequence_hashes() {
         let mut rng = OsRng;
 
         let alice = x25519_dalek::StaticSecret::new(&mut rng);

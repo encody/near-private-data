@@ -12,6 +12,7 @@ use crate::{key_registry::KeyRegistry, wallet::Wallet};
 
 pub mod channel;
 pub mod key_registry;
+pub mod message_repository;
 pub mod wallet;
 
 #[derive(Serialize, Deserialize, Debug)]
