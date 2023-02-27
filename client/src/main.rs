@@ -7,14 +7,12 @@ use near_primitives::types::AccountId;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    channel::Channel, key_registry::KeyRegistry, message_repository::MessageRepository,
-    wallet::Wallet,
-};
+use crate::{key_registry::KeyRegistry, messenger::Messenger, wallet::Wallet};
 
 pub mod channel;
 pub mod key_registry;
 pub mod message_repository;
+pub mod messenger;
 pub mod wallet;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -45,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     let signer = near_crypto::InMemorySigner::from_file(&env.key_file_path)?;
     let signer2 = near_crypto::InMemorySigner::from_file(&env.key2_file_path)?;
 
-    let wallet = Wallet::new(
+    let wallet1 = Wallet::new(
         network_rpc_url(env.network.clone()),
         signer.account_id.clone(),
         signer,
@@ -56,25 +54,25 @@ async fn main() -> anyhow::Result<()> {
         signer2,
     );
 
-    let keyreg = KeyRegistry::new(&wallet, &env.key_registry_account_id);
-    let keyreg2 = KeyRegistry::new(&wallet, &env.key_registry_account_id);
+    let keyreg1 = KeyRegistry::new(&wallet1, &env.key_registry_account_id);
+    let keyreg2 = KeyRegistry::new(&wallet2, &env.key_registry_account_id);
 
     let mut rng = OsRng;
 
-    let secret_key = x25519_dalek::StaticSecret::new(&mut rng);
-    let public_key = x25519_dalek::PublicKey::from(&secret_key);
+    let secret_key1 = x25519_dalek::StaticSecret::new(&mut rng);
+    let public_key = x25519_dalek::PublicKey::from(&secret_key1);
 
     let public_key_string = Base64::encode_string(public_key.as_bytes());
 
     println!("Generated my key: {public_key_string}");
 
     print!("Setting my key in registry...");
-    keyreg.set_my_key(&public_key).await?;
-    println!("Done.");
+    keyreg1.set_my_key(&public_key).await?;
+    println!("done.");
 
     print!("Retrieving my key from registry...");
-    let response = keyreg.get_my_key().await?;
-    println!("Done.");
+    let response = keyreg1.get_my_key().await?;
+    println!("done.");
 
     println!(
         "Response from contract: {}",
@@ -89,53 +87,55 @@ async fn main() -> anyhow::Result<()> {
     let secret_key2 = x25519_dalek::StaticSecret::new(&mut rng);
     let public_key2 = x25519_dalek::PublicKey::from(&secret_key2);
     keyreg2.set_my_key(&public_key2).await?;
-    println!("Done.");
+    println!("done.");
 
     let message = b"first to second";
-    let message_seq = 0;
 
-    // first key sends message to second key
-    {
-        let (first_send, _first_recv) = Channel::pair(
-            &secret_key.to_bytes().into(),
-            &public_key2.to_bytes().into(),
-        );
-        let msgrep = MessageRepository::new(&wallet, &env.message_repository_account_id);
-        let sequence_hash = &*first_send.sequence_hash(message_seq);
-        println!(
-            "Message sequence hash: {}",
-            Base64::encode_string(sequence_hash),
-        );
-        print!("Publishing message (first -> second) to message repository...");
-        msgrep
-            .publish_message(sequence_hash, &first_send.encrypt(message_seq, message)?)
-            .await?;
-        println!("Done.");
-    }
+    print!("Creating messengers...");
+    let mut messenger1 = Messenger::new(
+        &wallet1,
+        secret_key1,
+        &env.key_registry_account_id,
+        &env.message_repository_account_id,
+    );
+    let mut messenger2 = Messenger::new(
+        &wallet2,
+        secret_key2,
+        &env.key_registry_account_id,
+        &env.message_repository_account_id,
+    );
+    println!("done.");
 
-    // second key receives first key's message
-    {
-        let (_second_send, second_recv) = Channel::pair(
-            &secret_key2.to_bytes().into(),
-            &public_key.to_bytes().into(),
-        );
-        let msgrep2 = MessageRepository::new(&wallet2, &env.message_repository_account_id);
-        let sequence_hash = &*second_recv.sequence_hash(message_seq);
-        println!(
-            "Message sequence hash: {}",
-            Base64::encode_string(sequence_hash),
-        );
-        print!("Retrieving message from message repository...");
-        let ciphertext = msgrep2.get_message(sequence_hash).await?;
-        println!("Done.");
-        print!("Decrypting...");
-        let received_cleartext = second_recv.decrypt(message_seq, &ciphertext)?;
-        println!("Done.");
+    print!("Registering correspondents...");
+    messenger2
+        .register_correspondent(&wallet1.account_id)
+        .await?;
+    messenger1
+        .register_correspondent(&wallet2.account_id)
+        .await?;
+    println!("done.");
 
-        print!("Testing equality...");
-        assert_eq!(received_cleartext, message);
-        println!("Done.");
-    }
+    print!(
+        "Sending \"{}\" from {} to {}...",
+        String::from_utf8_lossy(message),
+        &wallet1.account_id,
+        &wallet2.account_id
+    );
+    messenger1.send(&wallet2.account_id, message).await?;
+    println!("done.");
+
+    print!("Checking for new messages to {}...", &wallet2.account_id);
+    let received_message = loop {
+        if let Some(m) = messenger2
+            .check_received_one_from(&wallet1.account_id)
+            .await?
+        {
+            break m;
+        }
+    };
+    println!("done.");
+
+    println!("Received: \"{}\"", String::from_utf8_lossy(&received_message));
 
     Ok(())
 }

@@ -6,7 +6,10 @@ use near_primitives::{
 };
 use serde_json::json;
 
-use crate::wallet::{Wallet, ONE_NEAR, ONE_TERAGAS};
+use crate::{
+    channel::Channel,
+    wallet::{Wallet, ONE_NEAR, ONE_TERAGAS},
+};
 
 pub struct MessageRepository<'a> {
     wallet: &'a Wallet,
@@ -21,7 +24,7 @@ impl<'a> MessageRepository<'a> {
         }
     }
 
-    pub async fn get_message(&self, sequence_hash: &[u8]) -> anyhow::Result<Vec<u8>> {
+    pub async fn get_message(&self, sequence_hash: &[u8]) -> anyhow::Result<Option<Vec<u8>>> {
         let base64_encoded_message: Option<String> = self
             .wallet
             .view::<Option<String>>(
@@ -33,7 +36,7 @@ impl<'a> MessageRepository<'a> {
 
         let base64_encoded_message = match base64_encoded_message {
             Some(r) => r,
-            _ => bail!("Message not found"),
+            _ => return Ok(None),
         };
 
         let message = match Base64::decode_vec(&base64_encoded_message) {
@@ -41,13 +44,13 @@ impl<'a> MessageRepository<'a> {
             Err(e) => bail!("Error decoding from base64: {}", e),
         };
 
-        Ok(message)
+        Ok(Some(message))
     }
 
     pub async fn publish_message(
         &self,
         sequence_hash: &[u8],
-        message: &[u8],
+        ciphertext: &[u8],
     ) -> anyhow::Result<()> {
         self.wallet
             .transact(
@@ -56,7 +59,7 @@ impl<'a> MessageRepository<'a> {
                     method_name: "publish".to_string(),
                     args: json!({
                         "sequence_hash": Base64::encode_string(sequence_hash),
-                        "message": Base64::encode_string(message),
+                        "message": Base64::encode_string(ciphertext),
                     })
                     .to_string()
                     .into_bytes()
@@ -68,5 +71,19 @@ impl<'a> MessageRepository<'a> {
             .await?;
 
         Ok(())
+    }
+
+    pub async fn discover_first_unused_nonce(&self, channel: &Channel) -> anyhow::Result<u32> {
+        // stupid linear search for now.
+        // obviously should use some sort of exponential bounds discovery and then binary search,
+        // but too lazy to do that now.
+        for i in 0.. {
+            let sequence_hash = channel.sequence_hash(i);
+            if let None = self.get_message(&*sequence_hash).await? {
+                return Ok(i);
+            }
+        }
+
+        bail!("Somehow you've sent {} messages", u32::MAX);
     }
 }

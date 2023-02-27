@@ -27,17 +27,17 @@ Currently there is not much of a user-friendly interface, and it is not interact
 A successful execution of the demo looks like this:
 
 ```text
-Setting my key in registry...Done.
-Retrieving my key from registry...Done.
-Response from contract: xM8lTphEVH/eMlFgp8eyLX/rffWTb9mIpU/cBrCm9FM=
+Generated my key: fBzRTvCMXU/bJbmC/s6bshJmwXecfrALzrEF/zmUlSw=
+Setting my key in registry...done.
+Retrieving my key from registry...done.
+Response from contract: fBzRTvCMXU/bJbmC/s6bshJmwXecfrALzrEF/zmUlSw=
 Key is correct.
-Setting second account key in registry...Done.
-Message sequence hash: EBxL4ZSaVuKxpZYawrRs/mjhCCW279Dyv0w2rkDuTaE=
-Publishing message (first -> second) to message repository...Done.
-Message sequence hash: EBxL4ZSaVuKxpZYawrRs/mjhCCW279Dyv0w2rkDuTaE=
-Retrieving message from message repository...Done.
-Decrypting...Done.
-Testing equality...Done.
+Setting second account key in registry...done.
+Creating messengers...done.
+Registering correspondents...done.
+Sending "first to second" from account1.testnet to account2.testnet...done.
+Checking for new messages to account2.testnet...done.
+Received: "first to second"
 ```
 
 Note: this was accurate at time of writing, but this project is still very early and in development, so this document may not always be in sync with the latest changes.
