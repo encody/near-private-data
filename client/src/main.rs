@@ -4,14 +4,14 @@ use base64ct::{Base64, Encoding};
 use ed25519_dalek::Keypair;
 
 use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
-use near_primitives::{transaction::FunctionCallAction, types::AccountId};
+use near_primitives::types::AccountId;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
-use crate::wallet::{Wallet, ONE_NEAR, ONE_TERAGAS};
+use crate::{key_registry::KeyRegistry, wallet::Wallet};
 
 pub mod channel;
+pub mod key_registry;
 pub mod wallet;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -19,6 +19,7 @@ struct Environment {
     key_file_path: PathBuf,
     network: Option<String>,
     key_registry_account_id: AccountId,
+    // message_repository_account_id: AccountId,
 }
 
 fn network_rpc_url(network: Option<String>) -> String {
@@ -59,39 +60,20 @@ async fn main() -> anyhow::Result<()> {
 
     let message_keypair: Keypair = Keypair::generate(&mut rng);
 
+    let keyreg = KeyRegistry::new(&wallet, env.key_registry_account_id);
+
     let public_key_string = public_key_to_string(&message_keypair.public);
 
     println!("Generated key: {public_key_string}");
 
-    wallet
-        .transact(
-            env.key_registry_account_id.clone(),
-            vec![near_primitives::transaction::Action::FunctionCall(
-                FunctionCallAction {
-                    method_name: "set_public_key".to_string(),
-                    args: json!({
-                        "public_key": public_key_string,
-                    })
-                    .to_string()
-                    .into_bytes(),
-                    gas: 3 * ONE_TERAGAS,
-                    deposit: ONE_NEAR >> 1,
-                },
-            )],
-        )
-        .await?;
+    keyreg.set_my_key(&message_keypair.public).await?;
 
-    let response: String = wallet
-        .view(
-            env.key_registry_account_id.clone(),
-            "get_public_key",
-            json!({"account_id": &wallet.account_id}),
-        )
-        .await?;
+    let response = keyreg.get_my_key().await?;
 
-    println!("Response from contract: {response}");
-
-    let response = Base64::decode_vec(&response).unwrap();
+    println!(
+        "Response from contract: {}",
+        Base64::encode_string(&response),
+    );
 
     assert_eq!(message_keypair.public.as_bytes() as &[u8], &response);
 

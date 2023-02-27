@@ -97,11 +97,6 @@ impl Wallet {
             .send(methods::broadcast_tx_commit::RpcBroadcastTxCommitRequest { signed_transaction })
             .await?;
 
-        println!("nonce: {nonce}");
-        println!("result nonce: {}", result.transaction.nonce);
-
-        println!("{result:?}");
-
         Ok(result)
     }
 
