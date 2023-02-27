@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::bail;
 use base64ct::{Base64, Encoding};
 use near_primitives::{transaction::FunctionCallAction, types::AccountId};
@@ -9,13 +11,13 @@ fn public_key_to_string(public_key: &x25519_dalek::PublicKey) -> String {
     Base64::encode_string(public_key.as_bytes())
 }
 
-pub struct KeyRegistry<'a> {
-    wallet: &'a Wallet,
+pub struct KeyRegistry {
+    wallet: Arc<Wallet>,
     account_id: AccountId,
 }
 
-impl<'a> KeyRegistry<'a> {
-    pub fn new(wallet: &'a Wallet, account_id: &'_ AccountId) -> Self {
+impl KeyRegistry {
+    pub fn new(wallet: Arc<Wallet>, account_id: &'_ AccountId) -> Self {
         Self {
             wallet,
             account_id: account_id.clone(),

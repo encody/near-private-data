@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, bail};
 use near_primitives::types::AccountId;
@@ -12,23 +12,23 @@ use crate::{
     wallet::Wallet,
 };
 
-pub struct Messenger<'a> {
+pub struct Messenger {
     secret_key: StaticSecret,
-    key_registry: KeyRegistry<'a>,
-    message_repository: MessageRepository<'a>,
+    key_registry: KeyRegistry,
+    message_repository: MessageRepository,
     conversations: HashMap<AccountId, Conversation>,
 }
 
-impl<'a> Messenger<'a> {
-    pub fn new<'b>(
-        wallet: &'a Wallet,
+impl Messenger {
+    pub fn new(
+        wallet: Arc<Wallet>,
         messenger_secret_key: StaticSecret,
         key_registry_account_id: &AccountId,
         message_repository_account_id: &AccountId,
     ) -> Self {
         Self {
             secret_key: messenger_secret_key,
-            key_registry: KeyRegistry::new(wallet, key_registry_account_id),
+            key_registry: KeyRegistry::new(Arc::clone(&wallet), key_registry_account_id),
             message_repository: MessageRepository::new(wallet, message_repository_account_id),
             conversations: HashMap::new(),
         }
@@ -119,7 +119,7 @@ pub struct Thread {
 }
 
 impl Thread {
-    pub async fn sync(&mut self, message_repository: &MessageRepository<'_>) -> anyhow::Result<()> {
+    pub async fn sync(&mut self, message_repository: &MessageRepository) -> anyhow::Result<()> {
         self.next_nonce = message_repository
             .discover_first_unused_nonce(&self.channel)
             .await?;

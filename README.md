@@ -27,17 +27,19 @@ Currently there is not much of a user-friendly interface, and it is not interact
 A successful execution of the demo looks like this:
 
 ```text
-Generated my key: fBzRTvCMXU/bJbmC/s6bshJmwXecfrALzrEF/zmUlSw=
+Generated my key: cN9WE/WwwJbPz1LFZzO0wQDyHS05EwSzhYswYK8pJm0=
 Setting my key in registry...done.
 Retrieving my key from registry...done.
-Response from contract: fBzRTvCMXU/bJbmC/s6bshJmwXecfrALzrEF/zmUlSw=
+Response from contract: cN9WE/WwwJbPz1LFZzO0wQDyHS05EwSzhYswYK8pJm0=
 Key is correct.
 Setting second account key in registry...done.
 Creating messengers...done.
 Registering correspondents...done.
-Sending "first to second" from account1.testnet to account2.testnet...done.
-Checking for new messages to account2.testnet...done.
+Sending "first to second" from hatchet.testnet to bit.testnet...
+Checking for new messages to bit.testnet...
 Received: "first to second"
+Time to receive: 4461ms
+Completed.
 ```
 
 Note: this was accurate at time of writing, but this project is still very early and in development, so this document may not always be in sync with the latest changes.

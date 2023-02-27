@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::bail;
 use base64ct::{Base64, Encoding};
 use near_primitives::{
@@ -11,13 +13,13 @@ use crate::{
     wallet::{Wallet, ONE_NEAR, ONE_TERAGAS},
 };
 
-pub struct MessageRepository<'a> {
-    wallet: &'a Wallet,
+pub struct MessageRepository {
+    wallet: Arc<Wallet>,
     account_id: AccountId,
 }
 
-impl<'a> MessageRepository<'a> {
-    pub fn new(wallet: &'a Wallet, account_id: &'_ AccountId) -> Self {
+impl MessageRepository {
+    pub fn new(wallet: Arc<Wallet>, account_id: &'_ AccountId) -> Self {
         Self {
             wallet,
             account_id: account_id.clone(),
@@ -62,8 +64,7 @@ impl<'a> MessageRepository<'a> {
                         "message": Base64::encode_string(ciphertext),
                     })
                     .to_string()
-                    .into_bytes()
-                    .into(),
+                    .into_bytes(),
                     gas: 300 * ONE_TERAGAS,
                     deposit: ONE_NEAR,
                 })],
@@ -79,7 +80,7 @@ impl<'a> MessageRepository<'a> {
         // but too lazy to do that now.
         for i in 0.. {
             let sequence_hash = channel.sequence_hash(i);
-            if let None = self.get_message(&*sequence_hash).await? {
+            if self.get_message(&*sequence_hash).await?.is_none() {
                 return Ok(i);
             }
         }
