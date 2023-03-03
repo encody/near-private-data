@@ -89,7 +89,7 @@ impl LineEditor {
             .split_once(' ')
             .map(|(command, tail)| format!("{} {}", style(command).green(), tail))
             .unwrap_or_else(|| format!("{}", style(buffer).green()));
-        format!("{}{inp}", style(prompt).black().bright())
+        format!("{}{inp}", prompt)
     }
 
     fn redraw_prompt(&self) {
@@ -106,7 +106,7 @@ impl LineEditor {
         );
     }
 
-    pub fn set_prompt(&mut self, prompt: &str) {
+    pub fn set_prompt(&mut self, prompt: impl ToString) {
         *self.prompt.lock().unwrap() = prompt.to_string();
     }
 
@@ -229,7 +229,7 @@ async fn main() -> anyhow::Result<()> {
 
         let (kill, mut recv) = monitor_conversation(Arc::clone(&messenger), correspondent.clone());
 
-        line_editor.set_prompt(":: ");
+        line_editor.set_prompt(format!("{}: ", style(&wallet.account_id).cyan().bright()));
 
         loop {
             line_editor.draw_prompt();
@@ -290,15 +290,7 @@ mod tests {
     use base64ct::{Base64, Encoding};
     use rand::rngs::OsRng;
 
-    #[test]
-    fn te() {
-        use chrono::prelude::*;
-        let y = Local
-            .from_utc_datetime(&NaiveDateTime::from_timestamp_millis(1677863828698).unwrap())
-            .format("%Y-%m-%d %H:%M:%S");
-        println!("{}", y);
-    }
-
+    #[ignore = "Use to generate test keys"]
     #[test]
     fn generate_messenger_secret_key() {
         let messenger_secret_key = x25519_dalek::StaticSecret::new(OsRng);
