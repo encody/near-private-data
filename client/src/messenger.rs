@@ -90,10 +90,10 @@ impl Messenger {
             .send
             .channel
             .encrypt(nonce, cleartext.as_ref())?;
-        eprintln!(
-            "Sending message with sequence hash {}",
-            style(Base64::encode_string(&*sequence_hash)).yellow()
-        );
+        // eprintln!(
+        //     "Sending message with sequence hash {}",
+        //     style(Base64::encode_string(&*sequence_hash)).yellow()
+        // );
         self.message_repository
             .publish_message(&*sequence_hash, &ciphertext)
             .await?;

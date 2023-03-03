@@ -7,12 +7,14 @@ use std::{
     },
 };
 
+use async_std::io::stdin;
 use base64ct::{Base64, Encoding};
 
 use console::style;
 use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
 use near_primitives::types::AccountId;
 use serde::{Deserialize, Serialize};
+use tokio::{select, sync::mpsc};
 use x25519_dalek::StaticSecret;
 
 use crate::{messenger::Messenger, wallet::Wallet};
@@ -43,8 +45,12 @@ fn network_rpc_url(network: Option<String>) -> String {
 }
 
 // message receiver thread
-fn receiver(messenger: Arc<Messenger>, sender_id: AccountId) -> impl Fn() {
+fn receiver(
+    messenger: Arc<Messenger>,
+    sender_id: AccountId,
+) -> (impl Fn(), mpsc::Receiver<Vec<u8>>) {
     let alive = Arc::new(AtomicBool::new(true));
+    let (send, recv) = mpsc::channel(1);
 
     let kill = {
         let alive = Arc::clone(&alive);
@@ -59,17 +65,13 @@ fn receiver(messenger: Arc<Messenger>, sender_id: AccountId) -> impl Fn() {
                 if let Some(received_message) =
                     messenger.receive_one_from(&sender_id).await.unwrap()
                 {
-                    eprintln!(
-                        "{}: {}",
-                        style(&sender_id).red().bright(),
-                        String::from_utf8_lossy(&received_message)
-                    );
+                    send.send(received_message).await.unwrap();
                 }
             }
         }
     });
 
-    kill
+    (kill, recv)
 }
 
 #[tokio::main]
@@ -98,18 +100,23 @@ async fn main() -> anyhow::Result<()> {
         &env.message_repository_account_id,
     ));
 
-    eprintln!("Welcome to the {} (test version)", style("NEAR Private Data Messenger").magenta());
+    let stdin = stdin();
+
+    eprintln!(
+        "Welcome to the {} (test version)",
+        style("NEAR Private Data Messenger").magenta()
+    );
 
     eprint!("Syncing public key with key repository...");
     messenger.sync_key().await?;
     eprintln!("done.");
 
     loop {
-        println!(
+        eprintln!(
             "You are logged in as {}.",
             style(&wallet.account_id).cyan().bright(),
         );
-        println!("Enter {} to exit.", style("/quit").bright().bold());
+        eprintln!("Enter {} to exit.", style("/quit").bright().bold());
 
         let correspondent: String = dialoguer::Input::new()
             .with_prompt("Chat with")
@@ -136,21 +143,47 @@ async fn main() -> anyhow::Result<()> {
             .await
             .unwrap();
 
-        let kill = receiver(Arc::clone(&messenger), correspondent.clone());
+        let (kill, mut recv) = receiver(Arc::clone(&messenger), correspondent.clone());
 
         loop {
-            let message: String = dialoguer::Input::new()
-                .with_prompt("say")
-                .with_post_completion_text("you")
-                .interact_text()
-                .unwrap();
+            eprint!(":: ");
 
-            if message == "/leave" {
-                kill();
-                break;
-            }
+            let mut send_message = String::new();
+            select! {
+                _ = stdin.read_line(&mut send_message) => {
+                    let send_message = send_message
+                        .strip_suffix("\r\n")
+                        .or(send_message.strip_suffix("\n"))
+                        .unwrap_or(&send_message);
+                    let (command, tail) = send_message
+                        .split_once(" ")
+                        .unwrap_or((&send_message, ""));
 
-            messenger.send(&correspondent, message).await.unwrap();
+                    match command {
+                        "/say" => {
+                            eprintln!("\r{}: {tail}", style(&wallet.account_id).cyan().bright());
+                            messenger.send(&correspondent, tail).await.unwrap();
+                        }
+                        "/leave" => {
+                            eprintln!("{}", style("Exiting chat.").green());
+                            kill();
+                            break;
+                        }
+                        _ => {
+                            eprintln!("{}", style(format!("Unknown command: {}", command)).red());
+                        }
+                    }
+                },
+                recv_message = recv.recv() => {
+                    if let Some(recv_message) = recv_message {
+                        eprintln!("\r{}: {}", style(&correspondent).magenta().bright(), String::from_utf8_lossy(&recv_message));
+                    } else {
+                        eprintln!("\r{}", style("Error connecting to message repository.").red());
+                        kill();
+                        break;
+                    }
+                },
+            };
         }
     }
 }
