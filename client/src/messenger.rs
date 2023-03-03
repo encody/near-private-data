@@ -4,8 +4,6 @@ use std::{
 };
 
 use anyhow::{anyhow, bail};
-use base64ct::{Base64, Encoding};
-use console::style;
 use near_primitives::types::AccountId;
 use tokio::{sync::RwLock, try_join};
 use x25519_dalek::{PublicKey, StaticSecret};
@@ -90,6 +88,8 @@ impl Messenger {
             .send
             .channel
             .encrypt(nonce, cleartext.as_ref())?;
+        // use base64ct::{Base64, Encoding};
+        // use console::style;
         // eprintln!(
         //     "Sending message with sequence hash {}",
         //     style(Base64::encode_string(&*sequence_hash)).yellow()

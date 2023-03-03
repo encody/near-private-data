@@ -1,13 +1,12 @@
 use std::{
     path::PathBuf,
-    str::FromStr,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex,
     },
+    thread,
 };
 
-use async_std::io::stdin;
 use base64ct::{Base64, Encoding};
 
 use console::style;
@@ -48,9 +47,9 @@ fn network_rpc_url(network: Option<String>) -> String {
 fn receiver(
     messenger: Arc<Messenger>,
     sender_id: AccountId,
-) -> (impl Fn(), mpsc::Receiver<Vec<u8>>) {
+) -> (impl Fn(), tokio::sync::mpsc::Receiver<Vec<u8>>) {
     let alive = Arc::new(AtomicBool::new(true));
-    let (send, recv) = mpsc::channel(1);
+    let (send, recv) = tokio::sync::mpsc::channel(1);
 
     let kill = {
         let alive = Arc::clone(&alive);
@@ -72,6 +71,82 @@ fn receiver(
     });
 
     (kill, recv)
+}
+
+struct LineEditor {
+    pub recv: mpsc::Receiver<String>,
+    pub prompt: Arc<Mutex<String>>,
+    buffer: Arc<Mutex<String>>,
+}
+
+impl LineEditor {
+    fn prompt(prompt: &str, buffer: &str) -> String {
+        let inp = buffer
+            .split_once(' ')
+            .map(|(command, tail)| format!("{} {}", style(command).green(), tail))
+            .unwrap_or_else(|| format!("{}", style(buffer).green()));
+        format!("{}{inp}", style(prompt).black().bright())
+    }
+
+    pub fn redraw_prompt(&self) {
+        eprint!(
+            "\r{}",
+            LineEditor::prompt(&self.prompt.lock().unwrap(), &self.buffer.lock().unwrap()),
+        );
+    }
+
+    pub fn set_prompt(&mut self, prompt: &str) {
+        *self.prompt.lock().unwrap() = prompt.to_string();
+    }
+
+    pub fn new(prompt: &str) -> Self {
+        let (send, recv) = mpsc::channel(2);
+        let buffer = Arc::new(Mutex::new(String::new()));
+        let prompt = Arc::new(Mutex::new(prompt.to_string()));
+
+        thread::spawn({
+            let buffer = Arc::clone(&buffer);
+            let prompt = Arc::clone(&prompt);
+            move || {
+                let stdout = console::Term::stdout();
+                loop {
+                    let k = stdout.read_key().unwrap();
+                    match k {
+                        console::Key::Enter => {
+                            let mut b = buffer.lock().unwrap();
+                            let s = b.to_string();
+                            b.clear();
+                            drop(b);
+                            eprintln!();
+                            send.blocking_send(s).unwrap();
+                        }
+                        console::Key::Backspace => {
+                            let mut buffer = buffer.lock().unwrap();
+                            buffer.pop();
+                            stdout.clear_line().unwrap();
+                            eprint!("\r{}", LineEditor::prompt(&prompt.lock().unwrap(), &buffer));
+                        }
+                        console::Key::Char(c) => {
+                            let mut buffer = buffer.lock().unwrap();
+                            buffer.push(c);
+                            eprint!("\r{}", LineEditor::prompt(&prompt.lock().unwrap(), &buffer));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        });
+
+        let le = Self {
+            recv,
+            prompt,
+            buffer,
+        };
+
+        le.redraw_prompt();
+
+        le
+    }
 }
 
 #[tokio::main]
@@ -100,43 +175,41 @@ async fn main() -> anyhow::Result<()> {
         &env.message_repository_account_id,
     ));
 
-    let stdin = stdin();
-
     eprintln!(
         "Welcome to the {} (test version)",
-        style("NEAR Private Data Messenger").magenta()
+        style("NEAR Private Data Messenger").magenta(),
     );
 
     eprint!("Syncing public key with key repository...");
     messenger.sync_key().await?;
     eprintln!("done.");
 
+    let mut line_editor = LineEditor::new("");
+
     loop {
         eprintln!(
             "You are logged in as {}.",
             style(&wallet.account_id).cyan().bright(),
         );
-        eprintln!("Enter {} to exit.", style("/quit").bright().bold());
+        eprintln!("{} to exit.", style("/quit").green().bold());
 
-        let correspondent: String = dialoguer::Input::new()
-            .with_prompt("Chat with")
-            .validate_with(|s: &String| {
-                if s == "/quit" || AccountId::from_str(s).is_ok() {
-                    Ok(())
-                } else {
-                    Err("Invalid")
-                }
-            })
-            .interact_text()
-            .unwrap();
+        line_editor.set_prompt("Chat with: ");
+        line_editor.redraw_prompt();
+        let correspondent: AccountId = loop {
+            let input = line_editor.recv.recv().await.unwrap();
+            if input == "/quit" {
+                return Ok(());
+            }
+            if let Ok(account_id) = input.parse() {
+                break account_id;
+            }
+        };
 
-        if correspondent == "/quit" {
-            return Ok(());
-        }
-
-        let correspondent = AccountId::from_str(&correspondent).unwrap();
-
-        eprintln!("Enter {} to leave chat.", style("/leave").bright().bold());
+        eprintln!(
+            "{} to say, {} to leave.",
+            style("/say").green().bold(),
+            style("/leave").green().bold(),
+        );
 
         messenger
             .register_correspondent(&correspondent)
@@ -145,19 +218,21 @@ async fn main() -> anyhow::Result<()> {
 
         let (kill, mut recv) = receiver(Arc::clone(&messenger), correspondent.clone());
 
-        loop {
-            eprint!(":: ");
+        line_editor.set_prompt(":: ");
 
-            let mut send_message = String::new();
+        loop {
+            line_editor.redraw_prompt();
+
             select! {
-                _ = stdin.read_line(&mut send_message) => {
+                send_message = line_editor.recv.recv() => {
+                    let send_message = send_message.unwrap();
                     let send_message = send_message
                         .strip_suffix("\r\n")
-                        .or(send_message.strip_suffix("\n"))
+                        .or(send_message.strip_suffix('\n'))
                         .unwrap_or(&send_message);
                     let (command, tail) = send_message
-                        .split_once(" ")
-                        .unwrap_or((&send_message, ""));
+                        .split_once(' ')
+                        .unwrap_or((send_message, ""));
 
                     match command {
                         "/say" => {
