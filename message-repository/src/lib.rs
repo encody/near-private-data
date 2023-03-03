@@ -4,6 +4,7 @@ use near_sdk::{
     env,
     json_types::Base64VecU8,
     near_bindgen, require,
+    serde::{Deserialize, Serialize},
     store::{LookupMap, Vector},
     BorshStorageKey, IntoStorageKey, PanicOnDefault, PromiseOrValue,
 };
@@ -40,10 +41,17 @@ pub struct AggregatorRecord {
     pub aggregator: Aggregator,
 }
 
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Message {
+    pub message: Base64VecU8,
+    pub block_timestamp_ms: u64,
+}
+
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]
 pub struct MessageRepository {
-    messages: LookupMap<Vec<u8>, Vec<u8>>,
+    messages: LookupMap<Vec<u8>, Message>,
     aggregator_history: Vector<AggregatorRecord>,
     aggregator_storage_usage: u64,
 }
@@ -96,10 +104,8 @@ impl MessageRepository {
         write(StorageKey::CurrentAggregator, current_aggregator);
     }
 
-    pub fn get_message(&self, sequence_hash: Base64VecU8) -> Option<Base64VecU8> {
-        self.messages
-            .get(&sequence_hash.0)
-            .map(|m| m.clone().into())
+    pub fn get_message(&self, sequence_hash: Base64VecU8) -> Option<&Message> {
+        self.messages.get(&sequence_hash.0)
     }
 
     pub fn get_aggregators_since(&self, block_timestamp_ms: u64) -> Vec<Base64VecU8> {
@@ -155,7 +161,13 @@ impl MessageRepository {
 
         let initial_storage_usage = env::storage_usage();
 
-        self.messages.insert(sequence_hash.0.clone(), message.0);
+        self.messages.insert(
+            sequence_hash.0.clone(),
+            Message {
+                message,
+                block_timestamp_ms: env::block_timestamp_ms(),
+            },
+        );
 
         ContractEvent::Publish { sequence_hash }.emit();
 

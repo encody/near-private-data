@@ -1557,6 +1557,7 @@ dependencies = [
  "async-std",
  "base64ct",
  "chacha20poly1305",
+ "chrono",
  "console",
  "crossterm 0.26.1",
  "dialoguer",

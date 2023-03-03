@@ -9,7 +9,9 @@ use std::{
 
 use base64ct::{Base64, Encoding};
 
+use chrono::{Local, NaiveDateTime, TimeZone};
 use console::style;
+use messenger::DecryptedMessage;
 use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
 use near_primitives::types::AccountId;
 use serde::{Deserialize, Serialize};
@@ -43,11 +45,13 @@ fn network_rpc_url(network: Option<String>) -> String {
         .unwrap_or_else(|| NEAR_TESTNET_RPC_URL.to_string())
 }
 
-// message receiver thread
-fn receiver(
+fn monitor_conversation(
     messenger: Arc<Messenger>,
     sender_id: AccountId,
-) -> (impl Fn(), tokio::sync::mpsc::Receiver<Vec<u8>>) {
+) -> (
+    impl Fn(),
+    tokio::sync::mpsc::Receiver<(AccountId, DecryptedMessage)>,
+) {
     let alive = Arc::new(AtomicBool::new(true));
     let (send, recv) = tokio::sync::mpsc::channel(1);
 
@@ -62,7 +66,7 @@ fn receiver(
         async move {
             while alive.load(Ordering::SeqCst) {
                 if let Some(received_message) =
-                    messenger.receive_one_from(&sender_id).await.unwrap()
+                    messenger.ordered_conversation(&sender_id).await.unwrap()
                 {
                     send.send(received_message).await.unwrap();
                 }
@@ -88,9 +92,16 @@ impl LineEditor {
         format!("{}{inp}", style(prompt).black().bright())
     }
 
-    pub fn redraw_prompt(&self) {
+    fn redraw_prompt(&self) {
         eprint!(
             "\r{}",
+            LineEditor::prompt(&self.prompt.lock().unwrap(), &self.buffer.lock().unwrap()),
+        );
+    }
+
+    pub fn draw_prompt(&self) {
+        eprint!(
+            "{}",
             LineEditor::prompt(&self.prompt.lock().unwrap(), &self.buffer.lock().unwrap()),
         );
     }
@@ -216,12 +227,12 @@ async fn main() -> anyhow::Result<()> {
             .await
             .unwrap();
 
-        let (kill, mut recv) = receiver(Arc::clone(&messenger), correspondent.clone());
+        let (kill, mut recv) = monitor_conversation(Arc::clone(&messenger), correspondent.clone());
 
         line_editor.set_prompt(":: ");
 
         loop {
-            line_editor.redraw_prompt();
+            line_editor.draw_prompt();
 
             select! {
                 send_message = line_editor.recv.recv() => {
@@ -236,7 +247,6 @@ async fn main() -> anyhow::Result<()> {
 
                     match command {
                         "/say" => {
-                            eprintln!("\r{}: {tail}", style(&wallet.account_id).cyan().bright());
                             messenger.send(&correspondent, tail).await.unwrap();
                         }
                         "/leave" => {
@@ -250,8 +260,20 @@ async fn main() -> anyhow::Result<()> {
                     }
                 },
                 recv_message = recv.recv() => {
-                    if let Some(recv_message) = recv_message {
-                        eprintln!("\r{}: {}", style(&correspondent).magenta().bright(), String::from_utf8_lossy(&recv_message));
+                    if let Some((sender_id, recv_message)) = recv_message {
+                        let sender_styled = if sender_id == wallet.account_id {
+                            style(&sender_id).cyan().bright()
+                        } else {
+                            style(&sender_id).magenta().bright()
+                        };
+                        let time_str = Local.from_utc_datetime(
+                                &NaiveDateTime::from_timestamp_millis(
+                                    recv_message.block_timestamp_ms as i64
+                                ).unwrap()
+                            ).format("%Y-%m-%d %H:%M:%S");
+                        let time_styled = style(time_str).black().bright();
+                        let message_string = String::from_utf8_lossy(&recv_message.message);
+                        eprintln!("\r[{time_styled}] {sender_styled}: {message_string}");
                     } else {
                         eprintln!("\r{}", style("Error connecting to message repository.").red());
                         kill();
@@ -267,6 +289,15 @@ async fn main() -> anyhow::Result<()> {
 mod tests {
     use base64ct::{Base64, Encoding};
     use rand::rngs::OsRng;
+
+    #[test]
+    fn te() {
+        use chrono::prelude::*;
+        let y = Local
+            .from_utc_datetime(&NaiveDateTime::from_timestamp_millis(1677863828698).unwrap())
+            .format("%Y-%m-%d %H:%M:%S");
+        println!("{}", y);
+    }
 
     #[test]
     fn generate_messenger_secret_key() {

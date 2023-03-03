@@ -6,12 +6,25 @@ use near_primitives::{
     transaction::{Action, FunctionCallAction},
     types::AccountId,
 };
+use serde::Deserialize;
 use serde_json::json;
 
 use crate::{
     channel::Channel,
     wallet::{Wallet, ONE_NEAR, ONE_TERAGAS},
 };
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct EncryptedMessage {
+    pub message: Vec<u8>,
+    pub block_timestamp_ms: u64,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct EncryptedMessageBase64 {
+    pub message: String,
+    pub block_timestamp_ms: u64,
+}
 
 pub struct MessageRepository {
     wallet: Arc<Wallet>,
@@ -26,10 +39,13 @@ impl MessageRepository {
         }
     }
 
-    pub async fn get_message(&self, sequence_hash: &[u8]) -> anyhow::Result<Option<Vec<u8>>> {
-        let base64_encoded_message: Option<String> = self
+    pub async fn get_message(
+        &self,
+        sequence_hash: &[u8],
+    ) -> anyhow::Result<Option<EncryptedMessage>> {
+        let base64_encoded_message: Option<EncryptedMessageBase64> = self
             .wallet
-            .view::<Option<String>>(
+            .view(
                 self.account_id.clone(),
                 "get_message",
                 json!({ "sequence_hash": Base64::encode_string(sequence_hash) }),
@@ -41,12 +57,15 @@ impl MessageRepository {
             _ => return Ok(None),
         };
 
-        let message = match Base64::decode_vec(&base64_encoded_message) {
+        let message = match Base64::decode_vec(&base64_encoded_message.message) {
             Ok(d) => d,
             Err(e) => bail!("Error decoding from base64: {}", e),
         };
 
-        Ok(Some(message))
+        Ok(Some(EncryptedMessage {
+            message,
+            block_timestamp_ms: base64_encoded_message.block_timestamp_ms,
+        }))
     }
 
     pub async fn publish_message(

@@ -15,7 +15,14 @@ use crate::{
     wallet::Wallet,
 };
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DecryptedMessage {
+    pub message: Vec<u8>,
+    pub block_timestamp_ms: u64,
+}
+
 pub struct Messenger {
+    wallet: Arc<Wallet>,
     secret_key: StaticSecret,
     key_registry: KeyRegistry,
     message_repository: MessageRepository,
@@ -32,8 +39,12 @@ impl Messenger {
         Self {
             secret_key: messenger_secret_key,
             key_registry: KeyRegistry::new(Arc::clone(&wallet), key_registry_account_id),
-            message_repository: MessageRepository::new(wallet, message_repository_account_id),
+            message_repository: MessageRepository::new(
+                Arc::clone(&wallet),
+                message_repository_account_id,
+            ),
             conversations: Default::default(),
+            wallet,
         }
     }
 
@@ -61,10 +72,10 @@ impl Messenger {
             next_nonce: Default::default(),
         };
 
-        try_join!(
-            send.sync(&self.message_repository),
-            recv.sync(&self.message_repository),
-        )?;
+        // try_join!(
+        //     send.sync(&self.message_repository),
+        //     recv.sync(&self.message_repository),
+        // )?;
 
         self.conversations
             .write()
@@ -82,8 +93,8 @@ impl Messenger {
         let conversation = conversations
             .get(recipient_id)
             .ok_or_else(|| anyhow!("Unknown recipient: {}", recipient_id))?;
-        let nonce = conversation.send.next_nonce();
-        let sequence_hash = conversation.send.next_sequence_hash();
+        let nonce = conversation.send.get_next_nonce();
+        let sequence_hash = conversation.send.get_next_sequence_hash();
         let ciphertext = conversation
             .send
             .channel
@@ -98,18 +109,51 @@ impl Messenger {
             .publish_message(&*sequence_hash, &ciphertext)
             .await?;
 
-        conversation.send.advance_nonce();
-
         Ok(())
     }
 
-    pub async fn receive_one_from(&self, sender_id: &AccountId) -> anyhow::Result<Option<Vec<u8>>> {
+    pub async fn ordered_conversation(
+        &self,
+        correspondent_id: &AccountId,
+    ) -> anyhow::Result<Option<(AccountId, DecryptedMessage)>> {
         let conversations = self.conversations.read().await;
         let conversation = conversations
-            .get(sender_id)
-            .ok_or_else(|| anyhow!("Unknown recipient: {}", sender_id))?;
-        let nonce = conversation.recv.next_nonce();
-        let sequence_hash = conversation.recv.next_sequence_hash();
+            .get(correspondent_id)
+            .ok_or_else(|| anyhow!("Unknown correspondent: {}", correspondent_id))?;
+
+        let send_thread = &conversation.send;
+        let recv_thread = &conversation.recv;
+
+        let (last_sent_message, last_received_message) = try_join!(
+            self.receive_one_from(send_thread),
+            self.receive_one_from(recv_thread)
+        )?;
+
+        match (last_sent_message, last_received_message) {
+            (Some(s), Some(r)) => {
+                if s.block_timestamp_ms < r.block_timestamp_ms {
+                    send_thread.advance_nonce();
+                    Ok(Some((self.wallet.account_id.clone(), s)))
+                } else {
+                    recv_thread.advance_nonce();
+                    Ok(Some((correspondent_id.clone(), r)))
+                }
+            }
+            (Some(s), _) => {
+                send_thread.advance_nonce();
+                Ok(Some((self.wallet.account_id.clone(), s)))
+            }
+            (_, Some(r)) => {
+                recv_thread.advance_nonce();
+                Ok(Some((correspondent_id.clone(), r)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    async fn receive_one_from(&self, thread: &Thread) -> anyhow::Result<Option<DecryptedMessage>> {
+        let nonce = thread.get_next_nonce();
+        let sequence_hash = thread.get_next_sequence_hash();
 
         let response = self.message_repository.get_message(&*sequence_hash).await?;
 
@@ -118,11 +162,12 @@ impl Messenger {
             None => return Ok(None),
         };
 
-        let cleartext = conversation.recv.channel.decrypt(nonce, &ciphertext)?;
+        let cleartext = thread.channel.decrypt(nonce, &ciphertext.message)?;
 
-        conversation.recv.advance_nonce();
-
-        Ok(Some(cleartext))
+        Ok(Some(DecryptedMessage {
+            message: cleartext,
+            block_timestamp_ms: ciphertext.block_timestamp_ms,
+        }))
     }
 }
 
@@ -140,11 +185,11 @@ impl Thread {
         Ok(())
     }
 
-    pub fn next_sequence_hash(&self) -> SequenceHash {
-        self.channel.sequence_hash(self.next_nonce())
+    pub fn get_next_sequence_hash(&self) -> SequenceHash {
+        self.channel.sequence_hash(self.get_next_nonce())
     }
 
-    pub fn next_nonce(&self) -> u32 {
+    pub fn get_next_nonce(&self) -> u32 {
         *self.next_nonce.lock().unwrap()
     }
 
