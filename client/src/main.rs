@@ -85,11 +85,12 @@ struct LineEditor {
 
 impl LineEditor {
     fn prompt(prompt: &str, buffer: &str) -> String {
-        let inp = buffer
+        let buffer_line_styled = buffer
             .split_once(' ')
-            .map(|(command, tail)| format!("{} {}", style(command).green(), tail))
-            .unwrap_or_else(|| format!("{}", style(buffer).green()));
-        format!("{}{inp}", prompt)
+            .map(|(command, tail)| format!("{} {}", highlight::text::command(command), tail))
+            .unwrap_or_else(|| highlight::text::command(buffer));
+
+        format!("{prompt}{buffer_line_styled}")
     }
 
     fn redraw_prompt(&self) {
@@ -160,6 +161,47 @@ impl LineEditor {
     }
 }
 
+mod highlight {
+    pub mod account {
+        use console::style;
+
+        pub fn me(s: impl AsRef<str>) -> String {
+            style(s.as_ref()).cyan().bold().bright().to_string()
+        }
+
+        pub fn other(s: impl AsRef<str>) -> String {
+            style(s.as_ref()).magenta().bold().bright().to_string()
+        }
+    }
+
+    pub mod text {
+        use console::style;
+
+        pub fn dim(s: impl AsRef<str>) -> String {
+            style(s.as_ref()).black().bright().to_string()
+        }
+
+        pub fn error(s: impl AsRef<str>) -> String {
+            style(s.as_ref()).red().to_string()
+        }
+
+        pub fn control(s: impl AsRef<str>) -> String {
+            style(s.as_ref()).green().to_string()
+        }
+
+        pub fn command(s: impl AsRef<str>) -> String {
+            style(s.as_ref()).green().bold().to_string()
+        }
+    }
+}
+
+fn format_time(epoch_ms: i64) -> String {
+    Local
+        .from_utc_datetime(&NaiveDateTime::from_timestamp_millis(epoch_ms).unwrap())
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv()?;
@@ -200,9 +242,9 @@ async fn main() -> anyhow::Result<()> {
     loop {
         eprintln!(
             "You are logged in as {}.",
-            style(&wallet.account_id).cyan().bright(),
+            highlight::account::me(&wallet.account_id),
         );
-        eprintln!("{} to exit.", style("/quit").green().bold());
+        eprintln!("{} to exit.", highlight::text::command("/quit"));
 
         line_editor.set_prompt("Chat with: ");
         line_editor.redraw_prompt();
@@ -218,8 +260,8 @@ async fn main() -> anyhow::Result<()> {
 
         eprintln!(
             "{} to say, {} to leave.",
-            style("/say").green().bold(),
-            style("/leave").green().bold(),
+            highlight::text::command("/say"),
+            highlight::text::command("/leave"),
         );
 
         messenger
@@ -229,14 +271,14 @@ async fn main() -> anyhow::Result<()> {
 
         let (kill, mut recv) = monitor_conversation(Arc::clone(&messenger), correspondent.clone());
 
-        line_editor.set_prompt(format!("{}: ", style(&wallet.account_id).cyan().bright()));
+        line_editor.set_prompt(format!("{}> ", highlight::account::me(&wallet.account_id)));
 
         loop {
             line_editor.draw_prompt();
 
             select! {
-                send_message = line_editor.recv.recv() => {
-                    let send_message = send_message.unwrap();
+                input_string = line_editor.recv.recv() => {
+                    let send_message = input_string.unwrap();
                     let send_message = send_message
                         .strip_suffix("\r\n")
                         .or(send_message.strip_suffix('\n'))
@@ -250,32 +292,27 @@ async fn main() -> anyhow::Result<()> {
                             messenger.send(&correspondent, tail).await.unwrap();
                         }
                         "/leave" => {
-                            eprintln!("{}", style("Exiting chat.").green());
+                            eprintln!("{}", highlight::text::control("Exiting chat."));
                             kill();
                             break;
                         }
                         _ => {
-                            eprintln!("{}", style(format!("Unknown command: {}", command)).red());
+                            eprintln!("{}", highlight::text::error(format!("Unknown command: {}", command)));
                         }
                     }
                 },
                 recv_message = recv.recv() => {
                     if let Some((sender_id, recv_message)) = recv_message {
                         let sender_styled = if sender_id == wallet.account_id {
-                            style(&sender_id).cyan().bright()
+                            highlight::account::me(&sender_id)
                         } else {
-                            style(&sender_id).magenta().bright()
+                            highlight::account::other(&sender_id)
                         };
-                        let time_str = Local.from_utc_datetime(
-                                &NaiveDateTime::from_timestamp_millis(
-                                    recv_message.block_timestamp_ms as i64
-                                ).unwrap()
-                            ).format("%Y-%m-%d %H:%M:%S");
-                        let time_styled = style(time_str).black().bright();
+                        let time_styled = highlight::text::dim(format_time(recv_message.block_timestamp_ms as i64));
                         let message_string = String::from_utf8_lossy(&recv_message.message);
                         eprintln!("\r[{time_styled}] {sender_styled}: {message_string}");
                     } else {
-                        eprintln!("\r{}", style("Error connecting to message repository.").red());
+                        eprintln!("\r{}", highlight::text::error("Error connecting to message repository."));
                         kill();
                         break;
                     }
