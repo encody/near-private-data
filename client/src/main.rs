@@ -1,4 +1,5 @@
 use std::{
+    io::Write,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -88,23 +89,20 @@ impl LineEditor {
         let buffer_line_styled = buffer
             .split_once(' ')
             .map(|(command, tail)| format!("{} {}", highlight::text::command(command), tail))
-            .unwrap_or_else(|| highlight::text::command(buffer));
+            .unwrap_or_else(|| highlight::text::command(buffer).to_string());
 
         format!("{prompt}{buffer_line_styled}")
     }
 
-    fn redraw_prompt(&self) {
-        eprint!(
+    pub fn redraw_prompt(&self) {
+        let stdout = console::Term::stdout();
+        stdout.clear_line().unwrap();
+        write!(
+            &stdout,
             "\r{}",
             LineEditor::prompt(&self.prompt.lock().unwrap(), &self.buffer.lock().unwrap()),
-        );
-    }
-
-    pub fn draw_prompt(&self) {
-        eprint!(
-            "{}",
-            LineEditor::prompt(&self.prompt.lock().unwrap(), &self.buffer.lock().unwrap()),
-        );
+        )
+        .unwrap();
     }
 
     pub fn set_prompt(&mut self, prompt: impl ToString) {
@@ -129,19 +127,29 @@ impl LineEditor {
                             let s = b.to_string();
                             b.clear();
                             drop(b);
-                            eprintln!();
+                            writeln!(&stdout).unwrap();
                             send.blocking_send(s).unwrap();
                         }
                         console::Key::Backspace => {
                             let mut buffer = buffer.lock().unwrap();
                             buffer.pop();
                             stdout.clear_line().unwrap();
-                            eprint!("\r{}", LineEditor::prompt(&prompt.lock().unwrap(), &buffer));
+                            write!(
+                                &stdout,
+                                "\r{}",
+                                LineEditor::prompt(&prompt.lock().unwrap(), &buffer)
+                            )
+                            .unwrap();
                         }
                         console::Key::Char(c) => {
                             let mut buffer = buffer.lock().unwrap();
                             buffer.push(c);
-                            eprint!("\r{}", LineEditor::prompt(&prompt.lock().unwrap(), &buffer));
+                            write!(
+                                &stdout,
+                                "\r{}",
+                                LineEditor::prompt(&prompt.lock().unwrap(), &buffer)
+                            )
+                            .unwrap();
                         }
                         _ => {}
                     }
@@ -163,34 +171,34 @@ impl LineEditor {
 
 mod highlight {
     pub mod account {
-        use console::style;
+        use console::{style, StyledObject};
 
-        pub fn me(s: impl AsRef<str>) -> String {
-            style(s.as_ref()).cyan().bold().bright().to_string()
+        pub fn me(s: impl ToString) -> StyledObject<String> {
+            style(s.to_string()).cyan().bold().bright()
         }
 
-        pub fn other(s: impl AsRef<str>) -> String {
-            style(s.as_ref()).magenta().bold().bright().to_string()
+        pub fn other(s: impl ToString) -> StyledObject<String> {
+            style(s.to_string()).magenta().bold().bright()
         }
     }
 
     pub mod text {
-        use console::style;
+        use console::{style, StyledObject};
 
-        pub fn dim(s: impl AsRef<str>) -> String {
-            style(s.as_ref()).black().bright().to_string()
+        pub fn dim(s: impl ToString) -> StyledObject<String> {
+            style(s.to_string()).black().bright()
         }
 
-        pub fn error(s: impl AsRef<str>) -> String {
-            style(s.as_ref()).red().to_string()
+        pub fn error(s: impl ToString) -> StyledObject<String> {
+            style(s.to_string()).red()
         }
 
-        pub fn control(s: impl AsRef<str>) -> String {
-            style(s.as_ref()).green().to_string()
+        pub fn control(s: impl ToString) -> StyledObject<String> {
+            style(s.to_string()).green()
         }
 
-        pub fn command(s: impl AsRef<str>) -> String {
-            style(s.as_ref()).green().bold().to_string()
+        pub fn command(s: impl ToString) -> StyledObject<String> {
+            style(s.to_string()).green().bold()
         }
     }
 }
@@ -204,7 +212,12 @@ fn format_time(epoch_ms: i64) -> String {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv()?;
+    match std::env::var("ENV") {
+        Ok(path) => dotenvy::from_path(path)?,
+        _ => {
+            dotenvy::dotenv()?;
+        }
+    }
 
     let env: Environment = envy::from_env()?;
 
@@ -228,29 +241,35 @@ async fn main() -> anyhow::Result<()> {
         &env.message_repository_account_id,
     ));
 
-    eprintln!(
+    let stdout = console::Term::stdout();
+
+    writeln!(
+        &stdout,
         "Welcome to the {} (test version)",
         style("NEAR Private Data Messenger").magenta(),
-    );
+    )
+    .unwrap();
 
-    eprint!("Syncing public key with key repository...");
+    write!(&stdout, "Syncing public key with key repository...").unwrap();
     messenger.sync_key().await?;
-    eprintln!("done.");
+    writeln!(&stdout, "done.").unwrap();
 
     let mut line_editor = LineEditor::new("");
 
     loop {
-        eprintln!(
-            "You are logged in as {}.",
+        writeln!(
+            &stdout,
+            "\rYou are logged in as {}.",
             highlight::account::me(&wallet.account_id),
-        );
-        eprintln!("{} to exit.", highlight::text::command("/quit"));
+        )
+        .unwrap();
+        writeln!(&stdout, "\r{} to exit.", highlight::text::command("/quit")).unwrap();
 
         line_editor.set_prompt("Chat with: ");
         line_editor.redraw_prompt();
         let correspondent: AccountId = loop {
             let input = line_editor.recv.recv().await.unwrap();
-            if input == "/quit" {
+            if input == "/quit" || input == "/exit" {
                 return Ok(());
             }
             if let Ok(account_id) = input.parse() {
@@ -258,11 +277,13 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
-        eprintln!(
+        writeln!(
+            &stdout,
             "{} to say, {} to leave.",
             highlight::text::command("/say"),
             highlight::text::command("/leave"),
-        );
+        )
+        .unwrap();
 
         messenger
             .register_correspondent(&correspondent)
@@ -274,7 +295,7 @@ async fn main() -> anyhow::Result<()> {
         line_editor.set_prompt(format!("{}> ", highlight::account::me(&wallet.account_id)));
 
         loop {
-            line_editor.draw_prompt();
+            line_editor.redraw_prompt();
 
             select! {
                 input_string = line_editor.recv.recv() => {
@@ -292,12 +313,12 @@ async fn main() -> anyhow::Result<()> {
                             messenger.send(&correspondent, tail).await.unwrap();
                         }
                         "/leave" => {
-                            eprintln!("{}", highlight::text::control("Exiting chat."));
+                            writeln!(&stdout, "\r{}.", highlight::text::control("Exiting chat")).unwrap();
                             kill();
                             break;
                         }
                         _ => {
-                            eprintln!("{}", highlight::text::error(format!("Unknown command: {}", command)));
+                            writeln!(&stdout, "\r{}", highlight::text::error(format!("Unknown command: {}", command))).unwrap();
                         }
                     }
                 },
@@ -310,9 +331,9 @@ async fn main() -> anyhow::Result<()> {
                         };
                         let time_styled = highlight::text::dim(format_time(recv_message.block_timestamp_ms as i64));
                         let message_string = String::from_utf8_lossy(&recv_message.message);
-                        eprintln!("\r[{time_styled}] {sender_styled}: {message_string}");
+                        writeln!(&stdout, "\r[{time_styled}] {sender_styled}: {message_string}").unwrap();
                     } else {
-                        eprintln!("\r{}", highlight::text::error("Error connecting to message repository."));
+                        writeln!(&stdout, "{}", highlight::text::error("Error connecting to message repository.")).unwrap();
                         kill();
                         break;
                     }
