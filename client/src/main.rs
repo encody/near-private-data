@@ -69,12 +69,10 @@ fn monitor_conversation(
     tokio::spawn({
         async move {
             let conversation = messenger.conversation(&sender_id).await.unwrap();
-            let mut messages = MultiplexedThreads::start(
+            let mut messages = MultiplexedThreads::new(
                 &messenger.message_repository,
                 [&conversation.send, &conversation.recv],
-            )
-            .await
-            .unwrap();
+            );
 
             while alive.load(Ordering::SeqCst) {
                 if let Some(received_message) = messages.next().await.unwrap() {

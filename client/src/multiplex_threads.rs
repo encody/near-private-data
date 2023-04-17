@@ -16,22 +16,21 @@ pub struct MultiplexedThreads<'a> {
 }
 
 impl<'a> MultiplexedThreads<'a> {
-    pub async fn start(
+    pub fn new(
         message_repository: &'a MessageRepository,
         threads: impl AsRef<[&'a Thread]>,
-    ) -> anyhow::Result<MultiplexedThreads<'a>> {
-        let threads = futures::future::try_join_all(threads.as_ref().iter().map(|thread| async {
-            Ok::<_, anyhow::Error>(ThreadAndNextMessage {
-                thread,
-                next_message: thread.receive_next(message_repository).await?,
-            })
-        }))
-        .await?;
-
-        Ok(Self {
+    ) -> Self {
+        Self {
             message_repository,
-            threads,
-        })
+            threads: threads
+                .as_ref()
+                .iter()
+                .map(|thread| ThreadAndNextMessage {
+                    thread,
+                    next_message: None,
+                })
+                .collect(),
+        }
     }
 
     pub async fn next(&mut self) -> anyhow::Result<Option<(AccountId, DecryptedMessage)>> {
