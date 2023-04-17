@@ -20,21 +20,13 @@ impl<'a> MultiplexedThreads<'a> {
         message_repository: &'a MessageRepository,
         threads: impl AsRef<[&'a Thread]>,
     ) -> anyhow::Result<MultiplexedThreads<'a>> {
-        let c = threads
-            .as_ref()
-            .iter()
-            .map(|t| &t.sender)
-            .collect::<Vec<_>>();
-        dbg!(c);
-
-        let threads: Vec<ThreadAndNextMessage> =
-            futures::future::try_join_all(threads.as_ref().iter().map(|thread| async {
-                Ok::<ThreadAndNextMessage<'a>, anyhow::Error>(ThreadAndNextMessage {
-                    thread,
-                    next_message: thread.receive_next(message_repository).await?,
-                })
-            }))
-            .await?;
+        let threads = futures::future::try_join_all(threads.as_ref().iter().map(|thread| async {
+            Ok::<_, anyhow::Error>(ThreadAndNextMessage {
+                thread,
+                next_message: thread.receive_next(message_repository).await?,
+            })
+        }))
+        .await?;
 
         Ok(Self {
             message_repository,
@@ -74,29 +66,5 @@ impl<'a> MultiplexedThreads<'a> {
             let next_message = thread.next_message.take().unwrap();
             (thread.thread.sender.clone(), next_message)
         }))
-
-        // let next_cached_message = self
-        //     .threads
-        //     .iter()
-        //     .enumerate()
-        //     .filter_map(|(i, t)| t.next_message.as_ref().map(|m| (i, m)))
-        //     .min_by_key(|(_, m)| m.block_timestamp_ms);
-
-        // if let Some((thread_index, _)) = next_cached_message {
-        //     dbg!(thread_index);
-        //     let mut next_from_thread = self.threads[thread_index]
-        //         .thread
-        //         .receive_next(self.message_repository)
-        //         .await?;
-
-        //     std::mem::swap(
-        //         &mut self.threads[thread_index].next_message,
-        //         &mut next_from_thread,
-        //     );
-
-        //     Ok(next_from_thread.map(|m| (self.threads[thread_index].thread.sender.clone(), m)))
-        // } else {
-        //     Ok(None)
-        // }
     }
 }

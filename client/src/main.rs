@@ -5,7 +5,8 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    thread, time::Duration,
+    thread,
+    time::Duration,
 };
 
 use base64ct::{Base64, Encoding};
