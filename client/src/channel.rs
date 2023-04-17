@@ -41,6 +41,7 @@ macro_rules! thin_marker {
 thin_marker!(CorrespondentId, [u8; 32], [u8]);
 thin_marker!(SequenceHash, [u8; 32], [u8]);
 
+#[derive(Clone, Debug)]
 pub struct Channel {
     pub sender_id: CorrespondentId,
     pub receiver_id: CorrespondentId,

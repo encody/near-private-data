@@ -5,7 +5,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    thread,
+    thread, time::Duration,
 };
 
 use base64ct::{Base64, Encoding};
@@ -13,10 +13,11 @@ use base64ct::{Base64, Encoding};
 use chrono::{Local, NaiveDateTime, TimeZone};
 use console::style;
 use messenger::DecryptedMessage;
+use multiplex_threads::MultiplexedThreads;
 use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
 use near_primitives::types::AccountId;
 use serde::{Deserialize, Serialize};
-use tokio::{select, sync::mpsc};
+use tokio::{select, sync::mpsc, time::sleep};
 use x25519_dalek::StaticSecret;
 
 use crate::{messenger::Messenger, wallet::Wallet};
@@ -25,6 +26,7 @@ pub mod channel;
 pub mod key_registry;
 pub mod message_repository;
 pub mod messenger;
+pub mod multiplex_threads;
 pub mod wallet;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -65,11 +67,19 @@ fn monitor_conversation(
 
     tokio::spawn({
         async move {
+            let conversation = messenger.conversation(&sender_id).await.unwrap();
+            let mut messages = MultiplexedThreads::start(
+                &messenger.message_repository,
+                [&conversation.send, &conversation.recv],
+            )
+            .await
+            .unwrap();
+
             while alive.load(Ordering::SeqCst) {
-                if let Some(received_message) =
-                    messenger.ordered_conversation(&sender_id).await.unwrap()
-                {
+                if let Some(received_message) = messages.next().await.unwrap() {
                     send.send(received_message).await.unwrap();
+                } else {
+                    sleep(Duration::from_millis(500)).await;
                 }
             }
         }

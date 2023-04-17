@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{anyhow, bail};
 use near_primitives::types::AccountId;
-use tokio::{sync::RwLock, try_join};
+use tokio::sync::RwLock;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{
@@ -15,18 +15,18 @@ use crate::{
     wallet::Wallet,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DecryptedMessage {
-    pub message: Vec<u8>,
     pub block_timestamp_ms: u64,
+    pub message: Vec<u8>,
 }
 
 pub struct Messenger {
     wallet: Arc<Wallet>,
     secret_key: StaticSecret,
     key_registry: KeyRegistry,
-    message_repository: MessageRepository,
-    conversations: Arc<RwLock<HashMap<AccountId, Conversation>>>,
+    pub message_repository: MessageRepository,
+    conversations: Arc<RwLock<HashMap<AccountId, Arc<Conversation>>>>,
 }
 
 impl Messenger {
@@ -63,12 +63,12 @@ impl Messenger {
         let (send, recv) = Channel::pair(&self.secret_key, &correspondent_public_key.into());
         let send = Thread {
             channel: send,
-            _correspondent: account_id.clone(),
+            sender: self.wallet.account_id.clone(),
             next_nonce: Default::default(),
         };
         let recv = Thread {
             channel: recv,
-            _correspondent: account_id.clone(),
+            sender: account_id.clone(),
             next_nonce: Default::default(),
         };
 
@@ -80,7 +80,7 @@ impl Messenger {
         self.conversations
             .write()
             .await
-            .insert(account_id.clone(), Conversation { send, recv });
+            .insert(account_id.clone(), Arc::new(Conversation { send, recv }));
         Ok(())
     }
 
@@ -112,68 +112,23 @@ impl Messenger {
         Ok(())
     }
 
-    pub async fn ordered_conversation(
+    pub async fn conversation(
         &self,
         correspondent_id: &AccountId,
-    ) -> anyhow::Result<Option<(AccountId, DecryptedMessage)>> {
+    ) -> anyhow::Result<Arc<Conversation>> {
         let conversations = self.conversations.read().await;
         let conversation = conversations
             .get(correspondent_id)
             .ok_or_else(|| anyhow!("Unknown correspondent: {}", correspondent_id))?;
 
-        let send_thread = &conversation.send;
-        let recv_thread = &conversation.recv;
-
-        let (last_sent_message, last_received_message) = try_join!(
-            self.receive_one_from(send_thread),
-            self.receive_one_from(recv_thread)
-        )?;
-
-        match (last_sent_message, last_received_message) {
-            (Some(s), Some(r)) => {
-                if s.block_timestamp_ms < r.block_timestamp_ms {
-                    send_thread.advance_nonce();
-                    Ok(Some((self.wallet.account_id.clone(), s)))
-                } else {
-                    recv_thread.advance_nonce();
-                    Ok(Some((correspondent_id.clone(), r)))
-                }
-            }
-            (Some(s), _) => {
-                send_thread.advance_nonce();
-                Ok(Some((self.wallet.account_id.clone(), s)))
-            }
-            (_, Some(r)) => {
-                recv_thread.advance_nonce();
-                Ok(Some((correspondent_id.clone(), r)))
-            }
-            _ => Ok(None),
-        }
-    }
-
-    async fn receive_one_from(&self, thread: &Thread) -> anyhow::Result<Option<DecryptedMessage>> {
-        let nonce = thread.get_next_nonce();
-        let sequence_hash = thread.get_next_sequence_hash();
-
-        let response = self.message_repository.get_message(&*sequence_hash).await?;
-
-        let ciphertext = match response {
-            Some(m) => m,
-            None => return Ok(None),
-        };
-
-        let cleartext = thread.channel.decrypt(nonce, &ciphertext.message)?;
-
-        Ok(Some(DecryptedMessage {
-            message: cleartext,
-            block_timestamp_ms: ciphertext.block_timestamp_ms,
-        }))
+        Ok(Arc::clone(conversation))
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Thread {
     channel: Channel,
-    _correspondent: AccountId,
+    pub sender: AccountId,
     next_nonce: Arc<Mutex<u32>>,
 }
 
@@ -183,6 +138,30 @@ impl Thread {
             .discover_first_unused_nonce(&self.channel)
             .await?;
         Ok(())
+    }
+
+    pub async fn receive_next(
+        &self,
+        message_repository: &MessageRepository,
+    ) -> anyhow::Result<Option<DecryptedMessage>> {
+        let nonce = self.get_next_nonce();
+        let sequence_hash = self.get_next_sequence_hash();
+
+        let response = message_repository.get_message(&*sequence_hash).await?;
+
+        let ciphertext = match response {
+            Some(m) => m,
+            None => return Ok(None),
+        };
+
+        let cleartext = self.channel.decrypt(nonce, &ciphertext.message)?;
+
+        self.advance_nonce();
+
+        Ok(Some(DecryptedMessage {
+            message: cleartext,
+            block_timestamp_ms: ciphertext.block_timestamp_ms,
+        }))
     }
 
     pub fn get_next_sequence_hash(&self) -> SequenceHash {
@@ -199,6 +178,6 @@ impl Thread {
 }
 
 pub struct Conversation {
-    send: Thread,
-    recv: Thread,
+    pub send: Thread,
+    pub recv: Thread,
 }
