@@ -115,10 +115,10 @@ mod tests {
 
     #[test]
     fn encryption_decryption() -> anyhow::Result<()> {
-        let mut rng = OsRng;
+        let rng = OsRng;
 
-        let alice = x25519_dalek::StaticSecret::new(&mut rng);
-        let bob = x25519_dalek::StaticSecret::new(&mut rng);
+        let alice = x25519_dalek::StaticSecret::new(rng);
+        let bob = x25519_dalek::StaticSecret::new(rng);
 
         let alice_pub = x25519_dalek::PublicKey::from(&alice);
         let bob_pub = x25519_dalek::PublicKey::from(&bob);
@@ -145,10 +145,10 @@ mod tests {
 
     #[test]
     fn sequence_hashes() {
-        let mut rng = OsRng;
+        let rng = OsRng;
 
-        let alice = x25519_dalek::StaticSecret::new(&mut rng);
-        let bob = x25519_dalek::StaticSecret::new(&mut rng);
+        let alice = x25519_dalek::StaticSecret::new(rng);
+        let bob = x25519_dalek::StaticSecret::new(rng);
 
         let alice_pub = x25519_dalek::PublicKey::from(&alice);
         let bob_pub = x25519_dalek::PublicKey::from(&bob);
