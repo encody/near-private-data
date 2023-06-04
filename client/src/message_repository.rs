@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::{
-    channel::Channel,
+    channel::{PairChannel, SequenceHashProducer},
     wallet::{Wallet, ONE_NEAR, ONE_TERAGAS},
 };
 
@@ -93,7 +93,7 @@ impl MessageRepository {
         Ok(())
     }
 
-    pub async fn discover_first_unused_nonce(&self, channel: &Channel) -> anyhow::Result<u32> {
+    pub async fn discover_first_unused_nonce(&self, channel: &PairChannel) -> anyhow::Result<u32> {
         // stupid linear search for now.
         // obviously should use some sort of exponential bounds discovery and then binary search,
         // but too lazy to do that now.

@@ -12,9 +12,9 @@ use std::{
 use base64ct::{Base64, Encoding};
 
 use chrono::{Local, NaiveDateTime, TimeZone};
+use combined::CombinedMessageStream;
 use console::style;
 use messenger::DecryptedMessage;
-use multiplex_threads::MultiplexedThreads;
 use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
 use near_primitives::types::AccountId;
 use serde::{Deserialize, Serialize};
@@ -24,10 +24,11 @@ use x25519_dalek::StaticSecret;
 use crate::{messenger::Messenger, wallet::Wallet};
 
 pub mod channel;
+pub mod combined;
+pub mod group;
 pub mod key_registry;
 pub mod message_repository;
 pub mod messenger;
-pub mod multiplex_threads;
 pub mod wallet;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -69,14 +70,14 @@ fn monitor_conversation(
     tokio::spawn({
         async move {
             let conversation = messenger.conversation(&sender_id).await.unwrap();
-            let mut messages = MultiplexedThreads::new(
+            let mut messages = CombinedMessageStream::new(
                 &messenger.message_repository,
                 [&conversation.send, &conversation.recv],
             );
 
             while alive.load(Ordering::SeqCst) {
-                if let Some(received_message) = messages.next().await.unwrap() {
-                    send.send(received_message).await.unwrap();
+                if let Some((sender, message)) = messages.next().await.unwrap() {
+                    send.send((sender.clone(), message)).await.unwrap();
                 } else {
                     sleep(Duration::from_millis(500)).await;
                 }

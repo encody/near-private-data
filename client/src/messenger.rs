@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{
-    channel::{Channel, SequenceHash},
+    channel::{Channel, PairChannel, SequenceHash, SequenceHashProducer},
     key_registry::KeyRegistry,
     message_repository::MessageRepository,
     wallet::Wallet,
@@ -60,22 +60,17 @@ impl Messenger {
             Ok(a) => a,
             Err(e) => bail!("Invalid key length {}", e.len()),
         };
-        let (send, recv) = Channel::pair(&self.secret_key, &correspondent_public_key.into());
-        let send = Thread {
+        let (send, recv) = PairChannel::pair(&self.secret_key, &correspondent_public_key.into());
+        let send = MessageStream {
             channel: send,
             sender: self.wallet.account_id.clone(),
             next_nonce: Default::default(),
         };
-        let recv = Thread {
+        let recv = MessageStream {
             channel: recv,
             sender: account_id.clone(),
             next_nonce: Default::default(),
         };
-
-        // try_join!(
-        //     send.sync(&self.message_repository),
-        //     recv.sync(&self.message_repository),
-        // )?;
 
         self.conversations
             .write()
@@ -126,14 +121,17 @@ impl Messenger {
 }
 
 #[derive(Clone, Debug)]
-pub struct Thread {
-    channel: Channel,
+pub struct MessageStream {
+    channel: PairChannel,
     pub sender: AccountId,
     next_nonce: Arc<Mutex<u32>>,
 }
 
-impl Thread {
-    pub async fn sync(&self, message_repository: &MessageRepository) -> anyhow::Result<()> {
+impl MessageStream {
+    pub async fn synchronize_nonce(
+        &self,
+        message_repository: &MessageRepository,
+    ) -> anyhow::Result<()> {
         *self.next_nonce.lock().unwrap() = message_repository
             .discover_first_unused_nonce(&self.channel)
             .await?;
@@ -178,6 +176,6 @@ impl Thread {
 }
 
 pub struct Conversation {
-    pub send: Thread,
-    pub recv: Thread,
+    pub send: MessageStream,
+    pub recv: MessageStream,
 }
