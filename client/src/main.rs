@@ -222,6 +222,7 @@ fn format_time(epoch_ms: i64) -> String {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    pretty_env_logger::init();
     match std::env::var("ENV") {
         Ok(path) => dotenvy::from_path(path)?,
         _ => {
@@ -230,6 +231,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let env: Environment = envy::from_env()?;
+    log::debug!("Environment: {:#?}", env);
 
     let signer = near_crypto::InMemorySigner::from_file(&env.key_file_path)?;
 
@@ -240,9 +242,10 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let messenger_secret_key: [u8; 32] = Base64::decode_vec(&env.messenger_secret_key)
-        .unwrap()
+        .expect("Failed to decode messenger_secret_key")
         .try_into()
-        .unwrap();
+        .expect("Failed to cast messenger_secret_key to bytes");
+    log::debug!("Loaded messenger secret key: {}", env.messenger_secret_key);
 
     let messenger = Arc::new(Messenger::new(
         Arc::clone(&wallet),
