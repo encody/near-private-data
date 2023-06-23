@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use near_primitives::types::AccountId;
 
 use crate::{
@@ -11,13 +13,13 @@ struct BufferedMessageStream<'a> {
 }
 
 pub struct CombinedMessageStream<'a> {
-    message_repository: &'a MessageRepository,
+    message_repository: Arc<MessageRepository>,
     streams: Vec<BufferedMessageStream<'a>>,
 }
 
 impl<'a> CombinedMessageStream<'a> {
     pub fn new(
-        message_repository: &'a MessageRepository,
+        message_repository: Arc<MessageRepository>,
         streams: impl AsRef<[&'a MessageStream]>,
     ) -> Self {
         Self {
@@ -40,7 +42,7 @@ impl<'a> CombinedMessageStream<'a> {
             let next_message_timestamp = if let Some(next_message) = &stream.next_message {
                 Some(next_message.block_timestamp_ms)
             } else {
-                let next_message = stream.stream.receive_next(self.message_repository).await?;
+                let next_message = stream.stream.receive_next(&self.message_repository).await?;
                 if let Some(next_message) = next_message {
                     let timestamp = next_message.block_timestamp_ms;
                     stream.next_message = Some(next_message);

@@ -2400,6 +2400,7 @@ dependencies = [
  "sha2 0.10.7",
  "tokio",
  "tui",
+ "verify",
  "x25519-dalek",
 ]
 
@@ -4315,6 +4316,7 @@ dependencies = [
 name = "verify"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bellperson",
  "blstrs",
  "ff",

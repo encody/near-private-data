@@ -40,3 +40,4 @@ Then you can run `cargo run` from the `client/` directory and it should open the
 # Authors
 
 - Jacob Lindahl <jacob.lindahl@near.org> [@sudo_build](https://twitter.com/sudo_build)
+- Jacob Lindahl <jacob.lindahl@near.org> [@sudo_build](https://twitter.com/sudo_build)
