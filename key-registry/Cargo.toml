@@ -1,8 +1,10 @@
 [package]
-authors = ["Jacob Lindahl <jacob.lindahl@near.org>"]
-edition = "2021"
 name = "near-private-data-public-key-registry-contract"
-version = "0.1.0"
+edition = { workspace = true }
+version = { workspace = true }
+readme = { workspace = true }
+homepage = { workspace = true }
+authors = { workspace = true }
 
 [dependencies]
 near-sdk = "4.1.1"

@@ -2373,7 +2373,7 @@ dependencies = [
 
 [[package]]
 name = "near-private-data-client"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-std",
@@ -2406,7 +2406,7 @@ dependencies = [
 
 [[package]]
 name = "near-private-data-message-repository-contract"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "cuckoofilter",
  "near-sdk",
@@ -2416,7 +2416,7 @@ dependencies = [
 
 [[package]]
 name = "near-private-data-public-key-registry-contract"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "near-sdk",
  "near-sdk-contract-tools",

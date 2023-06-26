@@ -1,9 +1,10 @@
 [package]
-name = "verify"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition = { workspace = true }
+name = "near-private-data-verification-gadget"
+version = { workspace = true }
+readme = { workspace = true }
+homepage = { workspace = true }
+authors = { workspace = true }
 
 [dependencies]
 bellperson = "0.25.0"

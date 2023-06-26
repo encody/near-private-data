@@ -1,7 +1,12 @@
-[workspace]
-members = [
-  "./client",
-  "./verify",
-  "./key-registry",
-  "./message-repository",
+[workspace.package]
+authors = [
+  "Jacob Lindahl <jacob.lindahl@near.org>",
+  "Donovan Dall <donovan@near.org>",
 ]
+edition = "2021"
+homepage = "https://near.org"
+readme = "README.md"
+version = "0.0.1"
+
+[workspace]
+members = ["./client", "./verify", "./key-registry", "./message-repository"]
