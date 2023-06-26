@@ -13,8 +13,7 @@ pub use blstrs::Bls12;
 use ff::PrimeField;
 use pairing::Engine;
 use rand::rngs::OsRng;
-use sha2::{Digest, Sha256};
-use std::{fs::File, path::PathBuf, ptr::read};
+use std::{fs::File, path::PathBuf};
 
 // TODO: this needs to migrate to something non-interactive like spartan for setup and groth is a little inefficient.
 // We also don't need contracts to verify these, although we can
@@ -63,7 +62,7 @@ impl<Scalar: PrimeField, const PREIMAGE_SIZE: usize> Circuit<Scalar>
                 .iter()
                 .map(|byte| (0..8).map(move |i| (byte >> i) & 1u8 == 1u8))
                 .flatten()
-                .map(|b| Some(b))
+                .map(Some)
                 .collect()
         } else {
             vec![None; PREIMAGE_SIZE * 8]
@@ -113,9 +112,7 @@ impl<const PREIMAGE_SIZE: usize> ShaPreimageProver<PREIMAGE_SIZE> {
         };
 
         // Create a Groth16 proof with our parameters.
-        let proof = groth16::create_random_proof(c, &self.params, &mut OsRng).unwrap();
-
-        proof
+        groth16::create_random_proof(c, &self.params, &mut OsRng).unwrap()
     }
 
     fn verify(self, proof: &Proof<Bls12>, hash: &[u8], pvk: &PreparedVerifyingKey<Bls12>) -> bool {
@@ -125,7 +122,7 @@ impl<const PREIMAGE_SIZE: usize> ShaPreimageProver<PREIMAGE_SIZE> {
 
 pub fn verify(proof: &Proof<Bls12>, hash: &[u8], pvk: &PreparedVerifyingKey<Bls12>) -> bool {
     // Pack the hash as inputs for proof verification.
-    let hash_bits = multipack::bytes_to_bits_le(&hash);
+    let hash_bits = multipack::bytes_to_bits_le(hash);
 
     let inputs = multipack::compute_multipacking::<<Bls12 as Engine>::Fr>(&hash_bits);
 

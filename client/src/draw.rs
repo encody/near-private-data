@@ -4,11 +4,6 @@ use anyhow::Result;
 use tokio::sync::mpsc::{self, Sender};
 use crate::traits::Actor;
 
-// pub struct Message {
-//     text: String,
-//     styled: StyledObject<String>,
-// }
-
 pub struct Draw;
 pub type Message = String;
 

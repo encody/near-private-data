@@ -5,7 +5,6 @@ use chrono::{Local, NaiveDateTime, TimeZone};
 use messenger::{DecryptedMessage, SequencedHashMessage};
 use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
 use near_primitives::types::AccountId;
-use proxy::Message as DelegateMessage;
 use std::{
     io::Write,
     sync::{Arc, Mutex},

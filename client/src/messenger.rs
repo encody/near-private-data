@@ -20,7 +20,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::mpsc::{self, Sender};
-use verify::{read_params, ShaPreimageProver};
+use near_private_data_verification_gadget::{read_params, ShaPreimageProver};
 use x25519_dalek::{PublicKey, StaticSecret};
 
 #[derive(Debug)]
@@ -247,7 +247,7 @@ impl Actor for Messenger {
                             Message::Hidden(correspondent, msg) => {
                                 let (sequence_hash, ciphertext) = self.encrypt(&correspondent, msg).unwrap();
                                 let preimage = self.secret_key.to_bytes();
-                                let hash: [u8; 32] = Sha256::digest(&Sha256::digest(&preimage)).into();
+                                let hash: [u8; 32] = Sha256::digest(Sha256::digest(preimage)).into();
                                 let params = read_params(&"/Users/geralt/projects/near-private-data/params.key".into(), false).unwrap();
                                 let prover = ShaPreimageProver::<32>::new(preimage, Some(params));
                                 let mut preimage_proof: Vec<u8> = vec![];
@@ -265,7 +265,7 @@ impl Actor for Messenger {
                             Message::RawSequenced(SequencedHashMessage {sequence_hash, ciphertext}) => {
                                 let message_repository = message_repository.clone();
                                 if let Err(e) = message_repository
-                                    .publish_message(&*sequence_hash, &ciphertext)
+                                    .publish_message(&sequence_hash, &ciphertext)
                                 .await {
                                     log::error!("Failed to send raw sequenced message {:?}: {:?}", sequence_hash, e);
                                 }

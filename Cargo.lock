@@ -2393,6 +2393,7 @@ dependencies = [
  "near-jsonrpc-client",
  "near-jsonrpc-primitives",
  "near-primitives 0.17.0",
+ "near-private-data-verification-gadget",
  "pretty_env_logger",
  "rand 0.7.3",
  "serde",
@@ -2400,7 +2401,6 @@ dependencies = [
  "sha2 0.10.7",
  "tokio",
  "tui",
- "verify",
  "x25519-dalek",
 ]
 
@@ -2420,6 +2420,21 @@ version = "0.0.1"
 dependencies = [
  "near-sdk",
  "near-sdk-contract-tools",
+]
+
+[[package]]
+name = "near-private-data-verification-gadget"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bellperson",
+ "blstrs",
+ "ff",
+ "pairing",
+ "pqcrypto-kyber",
+ "rand 0.8.5",
+ "sha2 0.10.7",
+ "verenc",
 ]
 
 [[package]]
@@ -4310,21 +4325,6 @@ dependencies = [
  "serde",
  "unknown_order",
  "zeroize",
-]
-
-[[package]]
-name = "verify"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bellperson",
- "blstrs",
- "ff",
- "pairing",
- "pqcrypto-kyber",
- "rand 0.8.5",
- "sha2 0.10.7",
- "verenc",
 ]
 
 [[package]]

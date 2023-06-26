@@ -1,6 +1,5 @@
 use crate::{
-    message_repository::MessageRepository,
-    messenger::{self, Messenger},
+    messenger::{Messenger},
     network_rpc_url,
     traits::Actor,
     wallet::Wallet,
@@ -9,12 +8,12 @@ use crate::{
 use anyhow::Result;
 use base64ct::{Base64, Encoding};
 use near_primitives::types::AccountId;
-use std::{path::PathBuf, sync::Arc};
+use std::{path::{PathBuf, Path}, sync::Arc};
 use tokio::{
     select,
     sync::mpsc::{self, Sender},
 };
-use verify::{
+use near_private_data_verification_gadget::{
     groth16::{prepare_verifying_key, VerifyingKey},
     Bls12, Proof,
 };
@@ -26,9 +25,9 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(key_file_path: &PathBuf, verifying_key_path: Option<&PathBuf>) -> Self {
+    pub fn new(key_file_path: &Path, verifying_key_path: Option<&PathBuf>) -> Self {
         Config {
-            key_file_path: key_file_path.clone(),
+            key_file_path: key_file_path.to_path_buf(),
             verifying_key_path: verifying_key_path.unwrap_or(&"./pvk.key".into()).clone(),
         }
     }
@@ -65,7 +64,7 @@ impl Proxy {
 
         let wallet = Wallet::new(network_rpc_url(network), signer.account_id.clone(), signer);
 
-        let messenger_secret_key: [u8; 32] = Base64::decode_vec(&messenger_secret_key)
+        let messenger_secret_key: [u8; 32] = Base64::decode_vec(messenger_secret_key)
             .expect("Failed to decode messenger_secret_key")
             .try_into()
             .expect("Failed to cast messenger_secret_key to bytes");
@@ -74,11 +73,11 @@ impl Proxy {
         let messenger = Messenger::new(
             Arc::new(wallet),
             StaticSecret::from(messenger_secret_key),
-            &key_registry_account_id,
-            &message_repository_account_id,
+            key_registry_account_id,
+            message_repository_account_id,
         );
 
-        let verifying_key = verify::read_vk(&config.verifying_key_path)?;
+        let verifying_key = near_private_data_verification_gadget::read_vk(&config.verifying_key_path)?;
 
         Ok(Proxy {
             messenger,
@@ -96,7 +95,6 @@ impl Actor for Proxy {
         let (sender, mut receiver) = mpsc::channel::<Self::Message>(24);
 
         let vk = self.verifying_key.clone();
-        let message_repository: Arc<MessageRepository> = self.messenger.message_repository.clone();
         Self::spawn(async move {
             select! {
                 Some(message) = receiver.recv() => {
@@ -107,16 +105,15 @@ impl Actor for Proxy {
     
                     // FIXME: unsafe
                     let proof = Proof::<Bls12>::read_many(&message.preimage_proof, 1).unwrap()[0].clone();
-                    if !verify::verify(&proof, &message.hash[..], &prepare_verifying_key(&vk)) {
+                    if !near_private_data_verification_gadget::verify(&proof, &message.hash[..], &prepare_verifying_key(&vk)) {
                         log::debug!(
                             "Could not verify proof for message {:?}",
                             message.sequenced_message
                         )
                     } else {
                         log::info!("Message passed validation, sending");
-                        let message_repository = message_repository.clone();
-                        if let Err(e) = message_repository
-                            .publish_message(&*message.sequenced_message.sequence_hash, &message.sequenced_message.ciphertext)
+                        if let Err(e) = self.messenger.message_repository
+                            .publish_message(&message.sequenced_message.sequence_hash, &message.sequenced_message.ciphertext)
                         .await {
                             log::error!("Failed to send raw sequenced message {:?}: {:?}", message.sequenced_message.sequence_hash, e);
                         }
