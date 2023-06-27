@@ -13,6 +13,7 @@ use anyhow::{anyhow, bail, Result};
 use base64ct::{Base64, Encoding};
 use console::style;
 use near_primitives::types::AccountId;
+use near_private_data_verification_gadget::{read_params, ShaPreimageProver};
 use sha2::Digest;
 use sha2::Sha256;
 use std::{
@@ -20,7 +21,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::sync::mpsc::{self, Sender};
-use near_private_data_verification_gadget::{read_params, ShaPreimageProver};
 use x25519_dalek::{PublicKey, StaticSecret};
 
 #[derive(Debug)]
@@ -183,7 +183,6 @@ impl Actor for Messenger {
     fn start(mut self, params: Self::StartParams) -> Result<Arc<Sender<Self::Message>>> {
         let (sender, mut receiver) = mpsc::channel::<Self::Message>(4);
         let (draw_tx, messages_tx, proxy_tx, kill_tx) = params;
-        let message_repository: Arc<MessageRepository> = self.message_repository.clone();
 
         Self::spawn(async move {
             let dtx_send = |str| async {
@@ -220,20 +219,23 @@ impl Actor for Messenger {
                                     log::error!("Failed to register correspondent {:?}", e);
                                 } else {
                                     log::info!("Correspondent {:?} registered", correspondent);
-                                    let message_repository: Arc<MessageRepository> = message_repository.clone();
+                                    let message_repository: Arc<MessageRepository> = self.message_repository.clone();
                                     let messages_tx = messages_tx.clone();
                                     let conversation = self.conversation(&correspondent).unwrap().clone();
                                     tokio::spawn(async move {
+                                        // FIXME: this is the bug with duplicated messages
+                                        log::info!("Registering correspondent message stream for {} and {}", conversation.send.sender, conversation.recv.sender);
                                         let mut messages = CombinedMessageStream::new(
                                             message_repository,
                                             [&conversation.send, &conversation.recv],
                                         );
                                         log::info!("Conversation initialized");
+
                                         loop {
-                                            if let Some((sender, message)) = messages.next().await.unwrap() {
+                                            if let Ok(Some((sender, message))) = messages.next().await {
                                                 messages_tx.send((sender.clone(), message)).await.unwrap();
                                             }
-                                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                                         }
                                     });
                                     dtx_send(format!("Ready to talk with {:?}", correspondent)).await;
@@ -263,8 +265,7 @@ impl Actor for Messenger {
                                 }
                             },
                             Message::RawSequenced(SequencedHashMessage {sequence_hash, ciphertext}) => {
-                                let message_repository = message_repository.clone();
-                                if let Err(e) = message_repository
+                                if let Err(e) = self.message_repository
                                     .publish_message(&sequence_hash, &ciphertext)
                                 .await {
                                     log::error!("Failed to send raw sequenced message {:?}: {:?}", sequence_hash, e);
@@ -288,6 +289,15 @@ pub struct MessageStream {
 }
 
 impl MessageStream {
+    pub(crate) fn new(
+        channel: PairChannel,
+        sender: AccountId,
+        next_nonce: Arc<Mutex<u32>>,
+    ) -> Self {
+        MessageStream {
+            channel, sender, next_nonce
+        }
+    }
     pub async fn synchronize_nonce(
         &self,
         message_repository: &MessageRepository,
