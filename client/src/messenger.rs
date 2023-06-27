@@ -85,6 +85,7 @@ impl Messenger {
             Err(e) => bail!("Invalid key length {}", e.len()),
         };
         let (send, recv) = PairChannel::pair(&self.secret_key, &correspondent_public_key.into());
+
         let send = MessageStream {
             channel: send,
             sender: self.wallet.account_id.clone(),
@@ -295,7 +296,9 @@ impl MessageStream {
         next_nonce: Arc<Mutex<u32>>,
     ) -> Self {
         MessageStream {
-            channel, sender, next_nonce
+            channel,
+            sender,
+            next_nonce,
         }
     }
     pub async fn synchronize_nonce(

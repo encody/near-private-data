@@ -174,10 +174,10 @@ async fn main() -> anyhow::Result<()> {
         &proxy::Config::new(
             &env.proxy_key_file_path,
             env.proxy_verifying_key_path.as_ref(),
+            &env.proxy_messenger_secret_key,
         ),
         &env.key_registry_account_id,
         &env.message_repository_account_id,
-        &env.messenger_secret_key,
         env.network.as_ref(),
     )?
     .start(())?;
@@ -209,7 +209,7 @@ async fn main() -> anyhow::Result<()> {
         if Kill::should_die() {
             break Ok(());
         }
-        
+
         select! {
             input_string = line_editor.recv.recv() => {
                 let send_message = input_string.unwrap();

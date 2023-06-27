@@ -1,10 +1,9 @@
-use near_primitives::types::AccountId;
-use std::{ops::DerefMut, pin::Pin, sync::Arc};
-
 use crate::{
     message_repository::MessageRepository,
     messenger::{DecryptedMessage, MessageStream},
 };
+use near_primitives::types::AccountId;
+use std::sync::Arc;
 
 pub(crate) struct BufferedMessageStream<'a> {
     stream: &'a MessageStream,
@@ -47,31 +46,6 @@ impl<'a> CombinedMessageStream<'a> {
             .await?
         }
 
-        // for (i, stream) in self.streams.iter_mut().enumerate() {
-        //     let next_message_timestamp = if let Some(next_message) = &stream.next_message {
-        //         Some(next_message.block_timestamp_ms)
-        //     } else {
-        //         if let Some(next_message) =
-        //             stream.stream.receive_next(&self.message_repository).await?
-        //         {
-        //             let timestamp = next_message.block_timestamp_ms;
-        //             stream.next_message = Some(next_message);
-        //             Some(timestamp)
-        //         } else {
-        //             None
-        //         }
-        //     };
-
-        //     if let Some(next_message_timestamp) = next_message_timestamp {
-        //         match stream_index_with_oldest_message {
-        //             Some((oldest_timestamp, _)) if oldest_timestamp < next_message_timestamp => {}
-        //             _ => {
-        //                 stream_index_with_oldest_message = Some((next_message_timestamp, i));
-        //             }
-        //         }
-        //     }
-        // }
-
         Ok(stream_index_with_oldest_message.map(|(_, i)| {
             let stream = &mut self.streams[i];
             get_stream_message(i, stream)
@@ -108,7 +82,6 @@ where
             None
         }
     };
-    println!("Next {:?}", next_message_timestamp);
 
     if let Some(next_message_timestamp) = next_message_timestamp {
         match stream_index_with_oldest_message {
@@ -294,6 +267,9 @@ mod tests {
             });
         }
 
-        assert_eq!(stream_index_with_oldest_message.unwrap().0, (*lowest_number.unwrap()) as u64);
+        assert_eq!(
+            stream_index_with_oldest_message.unwrap().0,
+            (*lowest_number.unwrap()) as u64
+        );
     }
 }

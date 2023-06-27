@@ -11,24 +11,32 @@ use near_private_data_verification_gadget::{
 };
 use std::{
     path::{Path, PathBuf},
-    sync::Arc, time::Duration,
+    sync::Arc,
+    time::Duration,
 };
 use tokio::{
     select,
-    sync::mpsc::{self, Sender}, time,
+    sync::mpsc::{self, Sender},
+    time,
 };
 use x25519_dalek::StaticSecret;
 
 pub struct Config {
     key_file_path: PathBuf,
     verifying_key_path: PathBuf,
+    messenger_secret_key: Base64String,
 }
 
 impl Config {
-    pub fn new(key_file_path: &Path, verifying_key_path: Option<&PathBuf>) -> Self {
+    pub fn new(
+        key_file_path: &Path,
+        verifying_key_path: Option<&PathBuf>,
+        messenger_secret_key: &Base64String,
+    ) -> Self {
         Config {
             key_file_path: key_file_path.to_path_buf(),
             verifying_key_path: verifying_key_path.unwrap_or(&"./pvk.key".into()).clone(),
+            messenger_secret_key: messenger_secret_key.clone(),
         }
     }
 }
@@ -46,7 +54,7 @@ pub struct Message {
 ///     - came from someone within the group (same as the current known-key in current limitation, ideally move to set inclusion proof and we hide the data in the trie)
 ///     - the message is authentic
 ///     - someone who knew the current key (inclusive of the group in the current limitations)
-///     
+///
 pub(crate) struct Proxy {
     messenger: Messenger,
     verifying_key: VerifyingKey<Bls12>,
@@ -57,14 +65,13 @@ impl Proxy {
         config: &Config,
         key_registry_account_id: &AccountId,
         message_repository_account_id: &AccountId,
-        messenger_secret_key: &Base64String,
         network: Option<&String>,
     ) -> Result<Self> {
         let signer = near_crypto::InMemorySigner::from_file(&config.key_file_path)?;
 
         let wallet = Wallet::new(network_rpc_url(network), signer.account_id.clone(), signer);
 
-        let messenger_secret_key: [u8; 32] = Base64::decode_vec(messenger_secret_key)
+        let messenger_secret_key: [u8; 32] = Base64::decode_vec(&config.messenger_secret_key)
             .expect("Failed to decode messenger_secret_key")
             .try_into()
             .expect("Failed to cast messenger_secret_key to bytes");

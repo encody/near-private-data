@@ -12,4 +12,5 @@ pub struct Environment {
     pub message_repository_account_id: AccountId,
     pub proxy_key_file_path: PathBuf,
     pub proxy_verifying_key_path: Option<PathBuf>,
+    pub proxy_messenger_secret_key: Base64String,
 }
