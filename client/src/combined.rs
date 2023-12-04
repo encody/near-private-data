@@ -73,14 +73,12 @@ where
 {
     let next_message_timestamp = if let Some(next_message) = &stream.next_message {
         Some(next_message.block_timestamp_ms)
+    } else if let Some(next_message) = get_next.await? {
+        let timestamp = next_message.block_timestamp_ms;
+        stream.next_message = Some(next_message);
+        Some(timestamp)
     } else {
-        if let Some(next_message) = get_next.await? {
-            let timestamp = next_message.block_timestamp_ms;
-            stream.next_message = Some(next_message);
-            Some(timestamp)
-        } else {
-            None
-        }
+        None
     };
 
     if let Some(next_message_timestamp) = next_message_timestamp {
@@ -176,7 +174,7 @@ mod tests {
         check_inner(
             next_message.block_timestamp_ms,
             1,
-            stream_index_with_oldest_message.clone(),
+            stream_index_with_oldest_message,
         );
 
         // Prev message 1, next message 2, oldest is 1
@@ -190,7 +188,7 @@ mod tests {
         )
         .await
         .unwrap();
-        check_inner(1, 1, stream_index_with_oldest_message.clone());
+        check_inner(1, 1, stream_index_with_oldest_message);
 
         // Prev message 2, new message, oldest is 1
         set_oldest_message(
@@ -201,7 +199,7 @@ mod tests {
         )
         .await
         .unwrap();
-        check_inner(1, 1, stream_index_with_oldest_message.clone());
+        check_inner(1, 1, stream_index_with_oldest_message);
     }
 
     #[tokio::test]
@@ -211,14 +209,7 @@ mod tests {
 
         let mut stream_index_with_oldest_message = None;
 
-        let check_inner =
-            |nts: u64, nindex: usize, stream_index_with_oldest_message: Option<(u64, usize)>| {
-                let (ts, i) = stream_index_with_oldest_message.unwrap();
-                assert_eq!(ts, nts);
-                assert_eq!(i, nindex);
-            };
-
-        let mut send = BufferedMessageStream {
+        let send = BufferedMessageStream {
             stream: &MessageStream::new(
                 PairChannel::new(&alice.pkey, &bob.pkey, secret),
                 alice.account,
@@ -228,7 +219,7 @@ mod tests {
             next_message: None,
         };
 
-        let mut recv = BufferedMessageStream {
+        let recv = BufferedMessageStream {
             stream: &MessageStream::new(
                 PairChannel::new(&bob.pkey, &alice.pkey, secret),
                 bob.account,
@@ -238,16 +229,16 @@ mod tests {
             next_message: None,
         };
 
-        let mut rng = rand::thread_rng();
+        let rng = rand::thread_rng();
         let num: Vec<u32> = rng.sample_iter(Standard).take(100).collect();
-        let mut bootstrap: Vec<DecryptedMessage> =
+        let bootstrap: Vec<DecryptedMessage> =
             num.iter().map(|i| new_message(*i as usize)).collect();
-        let mut bootstrap_smallest = num.clone();
+        let bootstrap_smallest = num.clone();
         let lowest_number = bootstrap_smallest.iter().min();
 
         let mut streams = vec![send, recv];
 
-        for (msg) in bootstrap.iter() {
+        for msg in bootstrap.iter() {
             for (i, stream) in streams.iter_mut().enumerate() {
                 set_oldest_message(&mut stream_index_with_oldest_message, i, stream, async {
                     Ok(Some(msg.clone()))
@@ -261,10 +252,10 @@ mod tests {
                 stream_index_with_oldest_message
             );
 
-            let next = stream_index_with_oldest_message.map(|(_, i)| {
+            if let Some((_, i)) = stream_index_with_oldest_message {
                 let stream = &mut streams[i];
-                get_stream_message(i, stream)
-            });
+                get_stream_message(i, stream);
+            }
         }
 
         assert_eq!(

@@ -290,6 +290,7 @@ pub struct MessageStream {
 }
 
 impl MessageStream {
+    #[allow(unused)] // for tests
     pub(crate) fn new(
         channel: PairChannel,
         sender: AccountId,

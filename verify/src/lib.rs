@@ -27,8 +27,7 @@ fn sha256d<Scalar: PrimeField, CS: ConstraintSystem<Scalar>>(
     // Flip endianness of each input byte
     let input: Vec<_> = data
         .chunks(8)
-        .map(|c| c.iter().rev())
-        .flatten()
+        .flat_map(|c| c.iter().rev())
         .cloned()
         .collect();
 
@@ -38,8 +37,7 @@ fn sha256d<Scalar: PrimeField, CS: ConstraintSystem<Scalar>>(
     // Flip endianness of each output byte
     Ok(res
         .chunks(8)
-        .map(|c| c.iter().rev())
-        .flatten()
+        .flat_map(|c| c.iter().rev())
         .cloned()
         .collect())
 }
@@ -60,8 +58,7 @@ impl<Scalar: PrimeField, const PREIMAGE_SIZE: usize> Circuit<Scalar>
         let bit_values = if let Some(preimage) = self.preimage {
             preimage
                 .iter()
-                .map(|byte| (0..8).map(move |i| (byte >> i) & 1u8 == 1u8))
-                .flatten()
+                .flat_map(|byte| (0..8).map(move |i| (byte >> i) & 1u8 == 1u8))
                 .map(Some)
                 .collect()
         } else {
@@ -115,7 +112,12 @@ impl<const PREIMAGE_SIZE: usize> ShaPreimageProver<PREIMAGE_SIZE> {
         groth16::create_random_proof(c, &self.params, &mut OsRng).unwrap()
     }
 
-    fn verify(self, proof: &Proof<Bls12>, hash: &[u8], pvk: &PreparedVerifyingKey<Bls12>) -> bool {
+    pub fn verify(
+        self,
+        proof: &Proof<Bls12>,
+        hash: &[u8],
+        pvk: &PreparedVerifyingKey<Bls12>,
+    ) -> bool {
         crate::verify(proof, hash, pvk)
     }
 }
@@ -164,9 +166,11 @@ pub fn write_params(path: &PathBuf, params: &Parameters<Bls12>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sha2::{Digest, Sha256};
     use std::str::FromStr;
 
     #[test]
+    #[ignore = "generate pvk.key"]
     fn generate_dumb_vk_file() {
         let path = PathBuf::from_str("../pvk.key").unwrap();
         let params = insecure_parameters::<32>();
@@ -176,16 +180,16 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "generate params.key and pvk.key"]
     fn generate_dumb_params() {
         let path = PathBuf::from_str("../params.key").unwrap();
         let params = insecure_parameters::<32>();
         write_params(&path, &params).unwrap();
         read_params(&path, true).expect("Generated a bad parameter file");
-        
+
         let path = PathBuf::from_str("../pvk.key").unwrap();
         write_vk(&path, &params.vk).unwrap();
         read_pvk(&path).expect("Generated a bad pvk");
-
     }
 
     #[test]
@@ -198,7 +202,7 @@ mod tests {
         let pvk = groth16::prepare_verifying_key(&params.vk);
 
         // Compute the hash of the preimage
-        let hash = Sha256::digest(&Sha256::digest(&preimage));
+        let hash = Sha256::digest(Sha256::digest(preimage));
 
         let prover = ShaPreimageProver::<32>::new(preimage, Some(params));
 
