@@ -138,25 +138,25 @@ fn format_time(epoch_ms: i64) -> String {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() {
     pretty_env_logger::init();
     match std::env::var("ENV") {
-        Ok(path) => dotenvy::from_path(path)?,
+        Ok(path) => dotenvy::from_path(path).unwrap(),
         _ => {
-            dotenvy::dotenv()?;
+            dotenvy::dotenv().unwrap();
         }
     }
-    let env: Environment = envy::from_env()?;
+    let env: Environment = envy::from_env().unwrap();
     let env = Arc::new(env);
     log::debug!("Environment: {:#?}", env);
 
     // Setup the channels
     // TODO: use ctrlc
-    let kill_tx = Kill.start(())?;
+    let kill_tx = Kill.start(()).unwrap();
     let kill = || {
         let kill_tx = kill_tx.clone();
         tokio::spawn(async move {
-            kill_tx.send(true).await.unwrap();
+            kill_tx.send(()).await.unwrap();
         });
     };
 
@@ -164,7 +164,7 @@ async fn main() -> anyhow::Result<()> {
     let messages_tx = Arc::new(messages_tx);
 
     // Setup drawing components
-    let draw_tx = Draw.start(())?;
+    let draw_tx = Draw.start(()).unwrap();
     let mut line_editor = LineEditor::new("");
     let draw = |str| async {
         draw_tx.send(str).await.unwrap();
@@ -179,17 +179,21 @@ async fn main() -> anyhow::Result<()> {
         &env.key_registry_account_id,
         &env.message_repository_account_id,
         env.network.as_ref(),
-    )?
-    .start(())?;
+    )
+    .unwrap()
+    .start(())
+    .unwrap();
 
-    let messenger = Messenger::init(&env)?;
+    let messenger = Messenger::init(&env).unwrap();
     let me = messenger.wallet.account_id.clone();
-    let messenger_tx = messenger.start((
-        draw_tx.clone(),
-        messages_tx.clone(),
-        proxy_tx.clone(),
-        kill_tx.clone(),
-    ))?;
+    let messenger_tx = messenger
+        .start((
+            draw_tx.clone(),
+            messages_tx.clone(),
+            proxy_tx.clone(),
+            kill_tx.clone(),
+        ))
+        .unwrap();
 
     thread::sleep(Duration::from_secs(2));
 
@@ -207,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
         line_editor.redraw_prompt();
 
         if Kill::should_die() {
-            break Ok(());
+            break;
         }
 
         select! {
@@ -225,21 +229,21 @@ async fn main() -> anyhow::Result<()> {
                     "/say" => {
                         let (correspondent, tail) = tail.split_once(' ').unwrap_or(("", tail));
                         let correspondent: AccountId = correspondent.parse().unwrap();
-                        messenger_tx.send(messenger::Message::Clear(correspondent, tail.to_string())).await?;
+                        messenger_tx.send(messenger::Message::Clear(correspondent, tail.to_string())).await.unwrap();
                     }
                     "/proxied" => {
                         let (correspondent, tail) = tail.split_once(' ').unwrap_or(("", tail));
                         let correspondent: AccountId = correspondent.parse().unwrap();
-                        messenger_tx.send(messenger::Message::Hidden(correspondent, tail.to_string())).await?;
+                        messenger_tx.send(messenger::Message::Hidden(correspondent, tail.to_string())).await.unwrap();
                     }
                     "/leave" => {
                         draw(format!("\r{}.", highlight::text::control("Exiting chat"))).await;
                         kill();
-                        break Ok(());
+                        break;
                     }
                     "/quit" | "/exit" => {
-                         kill();
-                         return Ok(());
+                        kill();
+                        return;
                     }
                     "/invite" => {
                         // Parse the account id from the user
@@ -268,7 +272,7 @@ async fn main() -> anyhow::Result<()> {
                 } else {
                     draw(format!("{}", highlight::text::error("Error connecting to message repository."))).await;
                     kill();
-                    break Ok(());
+                    break;
                 }
             }
         };

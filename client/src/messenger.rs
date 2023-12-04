@@ -178,7 +178,7 @@ impl Actor for Messenger {
         Arc<Sender<draw::Message>>,
         Arc<Sender<(AccountId, DecryptedMessage)>>,
         Arc<Sender<proxy::Message>>,
-        Arc<Sender<bool>>,
+        Arc<Sender<()>>,
     );
 
     fn start(mut self, params: Self::StartParams) -> Result<Arc<Sender<Self::Message>>> {
@@ -187,7 +187,7 @@ impl Actor for Messenger {
 
         Self::spawn(async move {
             let dtx_send = |str| async {
-                draw_tx.send(str).await;
+                draw_tx.send(str).await.unwrap();
             };
 
             dtx_send(format!(
@@ -199,7 +199,7 @@ impl Actor for Messenger {
             dtx_send("Syncing public key with key repository...".to_string()).await;
             if let Err(e) = self.sync_key().await {
                 log::error!("Failed to sync key {:?}", e);
-                kill_tx.send(true).await;
+                kill_tx.send(()).await.unwrap();
             };
             dtx_send("Done".to_string()).await;
 
@@ -251,7 +251,7 @@ impl Actor for Messenger {
                                 let (sequence_hash, ciphertext) = self.encrypt(&correspondent, msg).unwrap();
                                 let preimage = self.secret_key.to_bytes();
                                 let hash: [u8; 32] = Sha256::digest(Sha256::digest(preimage)).into();
-                                let params = read_params(&"/Users/geralt/projects/near-private-data/params.key".into(), false).unwrap();
+                                let params = read_params(&"./params.key".into(), false).unwrap();
                                 let prover = ShaPreimageProver::<32>::new(preimage, Some(params));
                                 let mut preimage_proof: Vec<u8> = vec![];
                                 let proof = prover.prove();
