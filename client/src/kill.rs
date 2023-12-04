@@ -1,6 +1,6 @@
 use crate::traits::Actor;
 use anyhow::Result;
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{atomic::AtomicBool, Arc};
 use tokio::sync::mpsc::{self, Sender};
 
 static SHOULD_DIE: AtomicBool = AtomicBool::new(false);
@@ -13,15 +13,12 @@ impl Kill {
     }
 }
 
-pub type Message = bool;
-
 impl Actor for Kill {
-    type Message = Message;
-
+    type Message = ();
     type StartParams = ();
 
-    fn start(self, _params: Self::StartParams) -> Result<Arc<Sender<Self::Message>>> {
-        let (sender, mut receiver) = mpsc::channel::<Self::Message>(1);
+    fn start(self, _params: Self::StartParams) -> Result<Arc<Sender<()>>> {
+        let (sender, mut receiver) = mpsc::channel::<()>(1);
         Self::spawn(async move {
             if receiver.recv().await.is_some() {
                 log::info!("Kill received");
