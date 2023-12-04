@@ -55,7 +55,7 @@ pub trait SequenceHashProducer {
 
 impl<T: Channel> SequenceHashProducer for T {
     fn sequence_hash(&self, sequence_number: SequenceNumber) -> SequenceHash {
-        let hash_bytes: [u8; 32] = Sha256::new()
+        let hash_bytes: [u8; 32] = <Sha256 as Digest>::new()
             .chain_update(sequence_number.to_le_bytes())
             .chain_update(self.secret_identifier())
             .finalize()
