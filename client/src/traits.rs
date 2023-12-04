@@ -1,6 +1,6 @@
 use anyhow::Result;
-use tokio::sync::mpsc::{Sender};
 use std::{future::Future, sync::Arc};
+use tokio::sync::mpsc::Sender;
 
 pub trait Actor {
     type Message;

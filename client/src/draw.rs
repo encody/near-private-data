@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use std::io::Write;
-use anyhow::Result;
-use tokio::sync::mpsc::{self, Sender};
 use crate::traits::Actor;
+use anyhow::Result;
+use std::io::Write;
+use std::sync::Arc;
+use tokio::sync::mpsc::{self, Sender};
 
 pub struct Draw;
 pub type Message = String;
@@ -12,10 +12,7 @@ impl Actor for Draw {
 
     type StartParams = ();
 
-    fn start(
-        self,
-        _params: Self::StartParams,
-    ) -> Result<std::sync::Arc<Sender<Self::Message>>> {
+    fn start(self, _params: Self::StartParams) -> Result<std::sync::Arc<Sender<Self::Message>>> {
         let (sender, mut receiver) = mpsc::channel::<Self::Message>(4);
 
         Self::spawn(async move {
@@ -27,6 +24,7 @@ impl Actor for Draw {
                 }
             }
         })?;
+
         Ok(Arc::new(sender))
     }
 }
