@@ -57,10 +57,12 @@ impl RpcClientWrapper {
 pub struct Wallet {
     rpc: RpcClientWrapper,
     pub account_id: AccountId,
+    // FIXME: not needed boxed
     signer: Box<dyn Signer>,
 }
 
 impl Wallet {
+    // FIXME: static signer
     pub fn new(client: impl AsUrl, account_id: AccountId, signer: impl 'static + Signer) -> Self {
         Self {
             rpc: RpcClientWrapper::new(JsonRpcClient::connect(client)),

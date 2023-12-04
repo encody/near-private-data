@@ -90,17 +90,19 @@ impl Channel for PairChannel {
 
     fn decrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
         let cipher = ChaCha20Poly1305::new_from_slice(&self.shared_secret)?;
+        log::debug!("Decrypting {}:{:?}", nonce, message);
         let nonce = u32_to_nonce(nonce);
         let cleartext = match cipher.decrypt(&nonce, message) {
             Ok(c) => c,
             Err(e) => bail!(e),
         };
+        log::debug!("Decrypted into {:?}", std::str::from_utf8(&cleartext));
         Ok(cleartext)
     }
 }
 
 impl PairChannel {
-    fn new(
+    pub(crate) fn new(
         sender_id: &x25519_dalek::PublicKey,
         receiver_id: &x25519_dalek::PublicKey,
         shared_secret: [u8; 32],
