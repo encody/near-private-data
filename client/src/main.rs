@@ -17,7 +17,6 @@ pub mod channel;
 pub mod combined;
 pub mod config;
 pub mod draw;
-pub mod group;
 pub mod highlight;
 pub mod key_registry;
 pub mod kill;

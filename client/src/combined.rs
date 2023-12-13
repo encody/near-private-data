@@ -95,7 +95,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel::PairChannel;
+    use crate::channel::one_way_pair::OneWayPair;
     use rand::{distributions::Standard, Rng};
     use std::sync::Mutex;
     use x25519_dalek::PublicKey;
@@ -130,7 +130,7 @@ mod tests {
         let (alice, bob) = pair();
         let secret = [3u8; 32];
         let dummy_msg_stream = MessageStream::new(
-            PairChannel::new(&alice.pkey, &bob.pkey, secret),
+            OneWayPair::new(&alice.pkey, &bob.pkey, secret),
             alice.account,
             Arc::new(Mutex::new(0)),
         );
@@ -211,7 +211,7 @@ mod tests {
 
         let send = BufferedMessageStream {
             stream: &MessageStream::new(
-                PairChannel::new(&alice.pkey, &bob.pkey, secret),
+                OneWayPair::new(&alice.pkey, &bob.pkey, secret),
                 alice.account,
                 Arc::new(Mutex::new(0)),
             )
@@ -221,7 +221,7 @@ mod tests {
 
         let recv = BufferedMessageStream {
             stream: &MessageStream::new(
-                PairChannel::new(&bob.pkey, &alice.pkey, secret),
+                OneWayPair::new(&bob.pkey, &alice.pkey, secret),
                 bob.account,
                 Arc::new(Mutex::new(0)),
             )

@@ -1,5 +1,5 @@
 use crate::{
-    channel::{Channel, PairChannel, SequenceHash, SequenceHashProducer},
+    channel::{one_way_pair::OneWayPair, Channel, SequenceHash, SequenceHashProducer},
     combined::CombinedMessageStream,
     config::Environment,
     draw, highlight,
@@ -84,7 +84,7 @@ impl Messenger {
             Ok(a) => a,
             Err(e) => bail!("Invalid key length {}", e.len()),
         };
-        let (send, recv) = PairChannel::pair(&self.secret_key, &correspondent_public_key.into());
+        let (send, recv) = OneWayPair::pair(&self.secret_key, &correspondent_public_key.into());
 
         let send = MessageStream {
             channel: send,
@@ -284,18 +284,14 @@ impl Actor for Messenger {
 
 #[derive(Clone, Debug)]
 pub struct MessageStream {
-    channel: PairChannel,
+    channel: OneWayPair,
     pub sender: AccountId,
     next_nonce: Arc<Mutex<u32>>,
 }
 
 impl MessageStream {
     #[allow(unused)] // for tests
-    pub(crate) fn new(
-        channel: PairChannel,
-        sender: AccountId,
-        next_nonce: Arc<Mutex<u32>>,
-    ) -> Self {
+    pub(crate) fn new(channel: OneWayPair, sender: AccountId, next_nonce: Arc<Mutex<u32>>) -> Self {
         MessageStream {
             channel,
             sender,

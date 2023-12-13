@@ -1,107 +1,28 @@
-use std::ops::Deref;
+use chacha20poly1305::ChaCha20Poly1305;
 
-use anyhow::bail;
-use chacha20poly1305::{
-    aead::{Aead, KeyInit},
-    ChaCha20Poly1305, Nonce,
-};
-use sha2::{Digest, Sha256};
-
-pub type SequenceNumber = u32;
-
-macro_rules! thin_marker {
-    ($name: ident, $target: ty, $as_ref: ty) => {
-        #[derive(
-            serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, PartialOrd, Hash,
-        )]
-        pub struct $name($target);
-
-        impl Deref for $name {
-            type Target = $target;
-
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-
-        impl AsRef<$as_ref> for $name {
-            fn as_ref(&self) -> &$as_ref {
-                &self.0
-            }
-        }
-
-        impl From<$target> for $name {
-            fn from(value: $target) -> Self {
-                Self(value)
-            }
-        }
-    };
-}
-
-thin_marker!(CorrespondentId, [u8; 32], [u8]);
-thin_marker!(SequenceHash, [u8; 32], [u8]);
-
-pub trait Channel {
-    fn encrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>>;
-
-    fn decrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>>;
-
-    fn secret_identifier(&self) -> &[u8; 256];
-}
-
-pub trait SequenceHashProducer {
-    fn sequence_hash(&self, sequence_number: SequenceNumber) -> SequenceHash;
-}
-
-impl<T: Channel> SequenceHashProducer for T {
-    fn sequence_hash(&self, sequence_number: SequenceNumber) -> SequenceHash {
-        let hash_bytes: [u8; 32] = <Sha256 as Digest>::new()
-            .chain_update(sequence_number.to_le_bytes())
-            .chain_update(self.secret_identifier())
-            .finalize()
-            .into();
-
-        SequenceHash(hash_bytes)
-    }
-}
+use crate::channel::{Channel, CorrespondentId};
 
 #[derive(Clone, Debug)]
-pub struct PairChannel {
+pub struct OneWayPair {
     pub sender_id: CorrespondentId,
     pub receiver_id: CorrespondentId,
     shared_secret: [u8; 32],
     identifier: [u8; 256],
 }
 
-impl Channel for PairChannel {
+impl Channel for OneWayPair {
+    type Cipher = ChaCha20Poly1305;
+
+    fn shared_secret(&self) -> &[u8; 32] {
+        &self.shared_secret
+    }
+
     fn secret_identifier(&self) -> &[u8; 256] {
         &self.identifier
     }
-
-    fn encrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let cipher = ChaCha20Poly1305::new_from_slice(&self.shared_secret)?;
-        let nonce = u32_to_nonce(nonce);
-        let ciphertext = match cipher.encrypt(&nonce, message) {
-            Ok(c) => c,
-            Err(e) => bail!(e),
-        };
-        Ok(ciphertext)
-    }
-
-    fn decrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let cipher = ChaCha20Poly1305::new_from_slice(&self.shared_secret)?;
-        log::debug!("Decrypting {}:{:?}", nonce, message);
-        let nonce = u32_to_nonce(nonce);
-        let cleartext = match cipher.decrypt(&nonce, message) {
-            Ok(c) => c,
-            Err(e) => bail!(e),
-        };
-        log::debug!("Decrypted into {:?}", std::str::from_utf8(&cleartext));
-        Ok(cleartext)
-    }
 }
 
-impl PairChannel {
+impl OneWayPair {
     pub(crate) fn new(
         sender_id: &x25519_dalek::PublicKey,
         receiver_id: &x25519_dalek::PublicKey,
@@ -135,15 +56,11 @@ impl PairChannel {
     }
 }
 
-fn u32_to_nonce(u: u32) -> Nonce {
-    Nonce::from_exact_iter([u.to_le_bytes(), [0u8; 4], [0u8; 4]].concat().into_iter()).unwrap()
-}
-
 #[cfg(test)]
 mod tests {
     use rand::rngs::OsRng;
 
-    use crate::channel::{Channel, PairChannel, SequenceHashProducer};
+    use crate::channel::{one_way_pair::OneWayPair, Channel, SequenceHashProducer};
 
     #[test]
     fn encryption_decryption() -> anyhow::Result<()> {
@@ -155,8 +72,8 @@ mod tests {
         let alice_pub = x25519_dalek::PublicKey::from(&alice);
         let bob_pub = x25519_dalek::PublicKey::from(&bob);
 
-        let (alice_send, alice_recv) = PairChannel::pair(&alice, &bob_pub);
-        let (bob_send, bob_recv) = PairChannel::pair(&bob, &alice_pub);
+        let (alice_send, alice_recv) = OneWayPair::pair(&alice, &bob_pub);
+        let (bob_send, bob_recv) = OneWayPair::pair(&bob, &alice_pub);
 
         let cleartext = b"hello, world";
 
@@ -185,8 +102,8 @@ mod tests {
         let alice_pub = x25519_dalek::PublicKey::from(&alice);
         let bob_pub = x25519_dalek::PublicKey::from(&bob);
 
-        let (alice_send, alice_recv) = PairChannel::pair(&alice, &bob_pub);
-        let (bob_send, bob_recv) = PairChannel::pair(&bob, &alice_pub);
+        let (alice_send, alice_recv) = OneWayPair::pair(&alice, &bob_pub);
+        let (bob_send, bob_recv) = OneWayPair::pair(&bob, &alice_pub);
 
         assert_eq!(alice_send.sequence_hash(0), bob_recv.sequence_hash(0));
         assert_eq!(alice_send.sequence_hash(1), bob_recv.sequence_hash(1));
