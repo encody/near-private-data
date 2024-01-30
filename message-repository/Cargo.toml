@@ -1,8 +1,10 @@
 [package]
-authors = ["Jacob Lindahl <jacob.lindahl@near.org>"]
-edition = "2021"
+edition = { workspace = true }
+version = { workspace = true }
+readme = { workspace = true }
+homepage = { workspace = true }
+authors = { workspace = true }
 name = "near-private-data-message-repository-contract"
-version = "0.1.0"
 
 [dependencies]
 cuckoofilter = "0.5.0"

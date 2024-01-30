@@ -29,7 +29,8 @@ impl KeyRegistry {
     }
 
     pub async fn get_key_for(&self, account_id: &AccountId) -> anyhow::Result<Vec<u8>> {
-        let response: String = self
+        log::info!("Reading key from registry for {:?}", account_id);
+        let response: Option<String> = self
             .wallet
             .view(
                 self.account_id.clone(),
@@ -37,6 +38,7 @@ impl KeyRegistry {
                 json!({ "account_id": account_id }),
             )
             .await?;
+        let response = response.ok_or_else(|| anyhow::anyhow!("Could not find a key"))?;
 
         let response = match Base64::decode_vec(&response) {
             Ok(v) => v,

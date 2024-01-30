@@ -1,0 +1,18 @@
+[package]
+edition = { workspace = true }
+name = "near-private-data-verification-gadget"
+version = { workspace = true }
+readme = { workspace = true }
+homepage = { workspace = true }
+authors = { workspace = true }
+
+[dependencies]
+bellperson = "0.25.0"
+blstrs = "0.7.0"
+ff = "0.13.0"
+pairing = "0.23.0"
+pqcrypto-kyber = "0.7.6"
+rand = "0.8.5"
+sha2 = "0.10.7"
+verenc = "0.2.0"
+anyhow = "1.0.71"
