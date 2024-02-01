@@ -1,5 +1,5 @@
 ---
-title: Flexible Channels
+title: Preventing Metadata Leakage in Communication over Public Channels
 authors:
   - Jacob Lindahl <lindahl@prg.is.titech.ac.jp>
   - Hidehiko Masuhara <masuhara@prg.is.titech.ac.jp>
@@ -26,20 +26,13 @@ header-includes: |
 | Tox              |                              |
 | Threema          |                              | -->
 
-## Introduction
+## Abstract
 
-With zero-knowledge proofs and the like becoming ever-more prevalent in the modern, web3-ified Internet, there arises the need for a new type of private messaging protocol: one that perfectly preserves the privacy of its users to the fulles extent possible, while also being _provably_ correct.
-
-Current implementations of privacy-focused messaging protocols suffer from a number of problems, ranging from metadata leakage (whether the identities of conversants, the timestamp of message transmission or receipt) to usability issues (such as the need to be online to send and receive messages).
-
-The Flexible Channels protocol primarily attempts to address two main areas:
-
-1. Metadata leakage. As described below, the protocol attempts to conceal as much metadata as possible.
-2. Efficiency. The protocol supports $O(1)$ space complexity for broadcast transmissions.
+With trustless technologies becoming ever-more prevalent in the modern Internet, there arises the need for a new type of private messaging protocol: one that preserves the privacy of its users to the fullest extent possible without the need to trust any third party. Current implementations of privacy-focused messaging protocols suffer from a number of problems, ranging from metadata leakage to usability issues. We describe a new message transmission protocol that addresses metadata leakage and broadcast efficiency.
 
 ## Metadata
 
-The goal of the Flexible Channels protocol is to build upon the work of previous protocols to hide even more metadata about conversations. In particular, we will hide the following information, in addition to hiding of the payload itself:
+The goal of this paper is to build upon the work of previous protocols to hide even more metadata about conversations. In particular, we will hide the following information, in addition to hiding of the payload itself:
 
 - Sender's identity
 - Sender's location (geographical and network)
@@ -59,7 +52,7 @@ However, privacy of these data is not sufficient to make a usable protocol. We w
 
 ## Protocol
 
-The key insight of the Flexible Channels protocol is the channel and sequence hash construction.
+The key insight of this paper is the channel and sequence hash construction.
 
 A channel is a total-ordered stream of messages. It consists of membership list (e.g. a sender and a receiver, or multiple members of a group) and a shared secret (derivable by Diffie-Hellman or any other method of establishing a shared secret).
 
@@ -95,7 +88,7 @@ Once a sequence hash has been generated, the sender can post a payload $(h_{s \r
 
 ## Development
 
-The Flexible Channels protocol is currently in development. The following is a proposal for the development of the protocol.
+A reference implementation for this paper is currently in development. The following is a proposal for the development of the protocol.
 
 ### Phase 1: Proof of Concept
 
