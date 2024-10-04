@@ -4,7 +4,7 @@ use near_jsonrpc_client::{methods, AsUrl, JsonRpcClient, MethodCallResult};
 use near_jsonrpc_primitives::types::query::QueryResponseKind;
 use near_primitives::{
     hash::CryptoHash,
-    transaction::Action,
+    transaction::{Action, Transaction, TransactionV0},
     types::{AccountId, BlockReference, Finality},
     views::{AccessKeyView, FinalExecutionOutcomeView, QueryRequest},
 };
@@ -57,15 +57,15 @@ impl RpcClientWrapper {
 pub struct Wallet {
     rpc: RpcClientWrapper,
     pub account_id: AccountId,
-    signer: Box<dyn Signer>,
+    signer: Signer,
 }
 
 impl Wallet {
-    pub fn new(client: impl AsUrl, account_id: AccountId, signer: impl 'static + Signer) -> Self {
+    pub fn new(client: impl AsUrl, account_id: AccountId, signer: Signer) -> Self {
         Self {
             rpc: RpcClientWrapper::new(JsonRpcClient::connect(client)),
             account_id,
-            signer: Box::new(signer),
+            signer,
         }
     }
 
@@ -81,16 +81,16 @@ impl Wallet {
 
         let nonce = current_nonce + 1;
 
-        let transaction = near_primitives::transaction::Transaction {
+        let transaction = Transaction::V0(TransactionV0 {
             nonce,
             block_hash,
             public_key: self.signer.public_key(),
             signer_id: self.account_id.clone(),
             receiver_id,
             actions,
-        };
+        });
 
-        let signed_transaction = transaction.sign(self.signer.as_ref());
+        let signed_transaction = transaction.sign(&self.signer);
 
         let result = self
             .rpc

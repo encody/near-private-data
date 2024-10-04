@@ -76,17 +76,7 @@ impl MessageRepository {
         self.wallet
             .transact(
                 self.account_id.clone(),
-                vec![Action::FunctionCall(FunctionCallAction {
-                    method_name: "publish".to_string(),
-                    args: json!({
-                        "sequence_hash": Base64::encode_string(sequence_hash),
-                        "message": Base64::encode_string(ciphertext),
-                    })
-                    .to_string()
-                    .into_bytes(),
-                    gas: 300 * ONE_TERAGAS,
-                    deposit: ONE_NEAR,
-                })],
+                vec![Action::FunctionCall(Box::new(FunctionCallAction{method_name:"publish".to_string(),args:json!({"sequence_hash":Base64::encode_string(sequence_hash),"message":Base64::encode_string(ciphertext),}).to_string().into_bytes(),gas:300*ONE_TERAGAS,deposit:ONE_NEAR,}))],
             )
             .await?;
 

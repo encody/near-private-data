@@ -1,15 +1,11 @@
 use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
-    json_types::Base64VecU8,
-    near_bindgen, require,
-    store::LookupMap,
-    AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue,
+    collections::LookupMap, env, json_types::Base64VecU8, near, require, AccountId,
+    BorshStorageKey, PanicOnDefault, PromiseOrValue,
 };
 use near_sdk_contract_tools::{event, standard::nep297::Event};
 
-#[allow(unused)]
-#[derive(BorshStorageKey, BorshSerialize)]
+#[derive(Debug, BorshStorageKey)]
+#[near]
 enum StorageKey {
     KeyMap,
 }
@@ -26,13 +22,13 @@ enum PublicKeyManagerEvent {
     },
 }
 
-#[near_bindgen]
-#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
 pub struct PublicKeyManagerContract {
     key_map: LookupMap<AccountId, Base64VecU8>,
 }
 
-#[near_bindgen]
+#[near]
 impl PublicKeyManagerContract {
     #[init]
     pub fn new() -> Self {
@@ -41,18 +37,21 @@ impl PublicKeyManagerContract {
         }
     }
 
-    pub fn get_public_key(&self, account_id: AccountId) -> Option<&Base64VecU8> {
+    pub fn get_public_key(&self, account_id: AccountId) -> Option<Base64VecU8> {
         self.key_map.get(&account_id)
     }
 
     #[payable]
     pub fn set_public_key(&mut self, public_key: Option<Base64VecU8>) -> PromiseOrValue<()> {
-        require!(env::attached_deposit() > 0, "Requires deposit");
+        require!(!env::attached_deposit().is_zero(), "Requires deposit");
         let initial_storage_usage = env::storage_usage();
 
-        self.key_map
-            .set(env::predecessor_account_id(), public_key.clone());
-        self.key_map.flush();
+        let predecessor = env::predecessor_account_id();
+        if let Some(public_key) = public_key.as_ref() {
+            self.key_map.insert(&predecessor, public_key);
+        } else {
+            self.key_map.remove(&predecessor);
+        }
 
         PublicKeyManagerEvent::PublicKeyChange {
             account_id: env::predecessor_account_id(),
@@ -60,25 +59,10 @@ impl PublicKeyManagerContract {
         }
         .emit();
 
-        let final_storage_usage = env::storage_usage();
-
-        let credit = if final_storage_usage < initial_storage_usage {
-            env::attached_deposit()
-                + (initial_storage_usage - final_storage_usage) as u128 * env::storage_byte_cost()
-        } else {
-            let charge =
-                (final_storage_usage - initial_storage_usage) as u128 * env::storage_byte_cost();
-            env::attached_deposit()
-                .checked_sub(charge)
-                .unwrap_or_else(|| {
-                    env::panic_str(&format!("Requires deposit of at least {charge} yoctoNEAR"))
-                })
-        };
-
-        if credit > 0 {
-            Promise::new(env::predecessor_account_id())
-                .transfer(credit)
-                .into()
+        if let Some(p) =
+            near_sdk_contract_tools::utils::apply_storage_fee_and_refund(initial_storage_usage, 0)
+        {
+            PromiseOrValue::Promise(p)
         } else {
             PromiseOrValue::Value(())
         }

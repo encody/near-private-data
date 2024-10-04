@@ -18,10 +18,13 @@ where
 }
 
 impl<H> BorshDeserialize for BorshCuckooFilter<H> {
-    fn deserialize(buf: &mut &[u8]) -> std::io::Result<Self> {
-        let length = usize::deserialize(buf)?;
-        let values = Vec::<u8>::deserialize(buf)?;
-        let exported = ExportedCuckooFilter { values, length };
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let length = u32::deserialize_reader(reader)?;
+        let values = Vec::<u8>::deserialize_reader(reader)?;
+        let exported = ExportedCuckooFilter {
+            length: length as usize,
+            values,
+        };
         Ok(Self(exported.into()))
     }
 }
@@ -41,10 +44,9 @@ impl<H> From<BorshCuckooFilter<H>> for CuckooFilter<H> {
 #[cfg(test)]
 mod tests {
     use cuckoofilter::CuckooFilter;
-    use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
     use siphasher::sip::SipHasher;
 
-    use crate::filter::BorshCuckooFilter;
+    use super::*;
 
     #[test]
     fn test() {
@@ -73,7 +75,7 @@ mod tests {
 
         let f = BorshCuckooFilter(c);
 
-        let s = f.try_to_vec().unwrap();
+        let s = near_sdk::borsh::to_vec(&f).unwrap();
 
         let f: BorshCuckooFilter<SipHasher> = BorshDeserialize::try_from_slice(&s).unwrap();
 

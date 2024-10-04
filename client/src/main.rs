@@ -236,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
     let wallet = Arc::new(Wallet::new(
         network_rpc_url(env.network.clone()),
         signer.account_id.clone(),
-        signer,
+        signer.into(),
     ));
 
     let messenger_secret_key: [u8; 32] = Base64::decode_vec(&env.messenger_secret_key)

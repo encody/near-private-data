@@ -1,6 +1,3 @@
 [workspace]
-members = [
-  "./client",
-  "./key-registry",
-  "./message-repository",
-]
+resolver = "2"
+members = ["./client", "./key-registry", "./message-repository"]

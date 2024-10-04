@@ -1,12 +1,10 @@
 use cuckoofilter::CuckooFilter;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    collections::{LookupMap, Vector},
     env,
     json_types::Base64VecU8,
-    near_bindgen, require,
-    serde::{Deserialize, Serialize},
-    store::{LookupMap, Vector},
-    BorshStorageKey, IntoStorageKey, PanicOnDefault, PromiseOrValue,
+    near, require, BorshStorageKey, IntoStorageKey, NearToken, PanicOnDefault, PromiseOrValue,
 };
 use near_sdk_contract_tools::{event, standard::nep297::Event};
 use siphasher::sip::SipHasher;
@@ -14,10 +12,10 @@ use siphasher::sip::SipHasher;
 mod filter;
 use filter::BorshCuckooFilter;
 
-const AGGREGATOR_CAPACITY: usize = (1 << 10) - 1;
+const AGGREGATOR_CAPACITY: u64 = (1 << 10) - 1;
 
-#[allow(unused)]
-#[derive(BorshStorageKey, BorshSerialize)]
+#[derive(BorshStorageKey)]
+#[near]
 enum StorageKey {
     Messages,
     CurrentAggregator,
@@ -35,21 +33,21 @@ enum ContractEvent {
 
 type Aggregator = BorshCuckooFilter<SipHasher>;
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[near]
 pub struct AggregatorRecord {
     pub end_block_timestamp_ms: u64,
     pub aggregator: Aggregator,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[derive(Debug, Clone, PartialEq)]
+#[near(serializers = [borsh, json])]
 pub struct Message {
     pub message: Base64VecU8,
     pub block_timestamp_ms: u64,
 }
 
-#[near_bindgen]
-#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
 pub struct MessageRepository {
     messages: LookupMap<Vec<u8>, Message>,
     aggregator_history: Vector<AggregatorRecord>,
@@ -57,19 +55,19 @@ pub struct MessageRepository {
 }
 
 fn new_aggregator() -> Aggregator {
-    CuckooFilter::with_capacity(AGGREGATOR_CAPACITY).into()
+    CuckooFilter::with_capacity(AGGREGATOR_CAPACITY as usize).into()
 }
 
 fn get_lazy<T: BorshDeserialize>(key: impl IntoStorageKey) -> Option<T> {
     let bytes = env::storage_read(&key.into_storage_key())?;
-    BorshDeserialize::try_from_slice(&bytes).ok()
+    borsh::from_slice(&bytes).ok()
 }
 
 fn write<T: BorshSerialize>(key: impl IntoStorageKey, value: T) {
-    env::storage_write(&key.into_storage_key(), &value.try_to_vec().unwrap());
+    env::storage_write(&key.into_storage_key(), &borsh::to_vec(&value).unwrap());
 }
 
-#[near_bindgen]
+#[near]
 impl MessageRepository {
     #[init]
     pub fn new() -> Self {
@@ -91,12 +89,12 @@ impl MessageRepository {
         let mut current_aggregator: Aggregator = get_lazy(StorageKey::CurrentAggregator).unwrap();
 
         // create new aggregator if current one is full
-        if current_aggregator.0.len() >= AGGREGATOR_CAPACITY {
+        if current_aggregator.0.len() as u64 >= AGGREGATOR_CAPACITY {
             let record = AggregatorRecord {
                 aggregator: current_aggregator,
                 end_block_timestamp_ms: env::block_timestamp_ms(),
             };
-            self.aggregator_history.push(record);
+            self.aggregator_history.push(&record);
             current_aggregator = new_aggregator();
         }
 
@@ -104,7 +102,7 @@ impl MessageRepository {
         write(StorageKey::CurrentAggregator, current_aggregator);
     }
 
-    pub fn get_message(&self, sequence_hash: Base64VecU8) -> Option<&Message> {
+    pub fn get_message(&self, sequence_hash: Base64VecU8) -> Option<Message> {
         self.messages.get(&sequence_hash.0)
     }
 
@@ -115,7 +113,7 @@ impl MessageRepository {
             .rev()
             .map_while(|a| {
                 if block_timestamp_ms > a.end_block_timestamp_ms {
-                    Some(a.aggregator.try_to_vec().unwrap().into())
+                    Some(borsh::to_vec(&a.aggregator).unwrap().into())
                 } else {
                     None
                 }
@@ -123,9 +121,7 @@ impl MessageRepository {
             .collect::<Vec<Base64VecU8>>();
 
         history.push(
-            get_lazy::<Aggregator>(StorageKey::CurrentAggregator)
-                .unwrap()
-                .try_to_vec()
+            borsh::to_vec(&get_lazy::<Aggregator>(StorageKey::CurrentAggregator).unwrap())
                 .unwrap()
                 .into(),
         );
@@ -149,11 +145,12 @@ impl MessageRepository {
 
         let item_aggregator_fee = {
             let aggregator_storage_cost =
-                self.aggregator_storage_usage as u128 * env::storage_byte_cost();
-            let single_item_storage_cost = aggregator_storage_cost / AGGREGATOR_CAPACITY as u128;
-            let remainder = aggregator_storage_cost % AGGREGATOR_CAPACITY as u128;
+                env::storage_byte_cost().saturating_mul(self.aggregator_storage_usage as u128);
+            let single_item_storage_cost =
+                aggregator_storage_cost.saturating_div(AGGREGATOR_CAPACITY as u128);
+            let remainder = aggregator_storage_cost.as_yoctonear() % AGGREGATOR_CAPACITY as u128;
             if remainder > 0 {
-                single_item_storage_cost + 1
+                single_item_storage_cost.saturating_add(NearToken::from_yoctonear(1))
             } else {
                 single_item_storage_cost
             }
@@ -162,8 +159,8 @@ impl MessageRepository {
         let initial_storage_usage = env::storage_usage();
 
         self.messages.insert(
-            sequence_hash.0.clone(),
-            Message {
+            &sequence_hash.0,
+            &Message {
                 message,
                 block_timestamp_ms: env::block_timestamp_ms(),
             },
@@ -173,7 +170,7 @@ impl MessageRepository {
 
         near_sdk_contract_tools::utils::apply_storage_fee_and_refund(
             initial_storage_usage,
-            item_aggregator_fee,
+            item_aggregator_fee.as_yoctonear(),
         )
         .map_or(PromiseOrValue::Value(()), |p| p.into())
     }

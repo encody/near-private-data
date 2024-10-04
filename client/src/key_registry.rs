@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use base64ct::{Base64, Encoding};
-use near_primitives::{transaction::FunctionCallAction, types::AccountId};
+use near_primitives::{
+    transaction::{Action, FunctionCallAction},
+    types::AccountId,
+};
 use serde_json::json;
 
 use crate::wallet::{Wallet, ONE_NEAR, ONE_TERAGAS};
@@ -50,18 +53,16 @@ impl KeyRegistry {
         self.wallet
             .transact(
                 self.account_id.clone(),
-                vec![near_primitives::transaction::Action::FunctionCall(
-                    FunctionCallAction {
-                        method_name: "set_public_key".to_string(),
-                        args: json!({
-                            "public_key": public_key_to_string(public_key),
-                        })
-                        .to_string()
-                        .into_bytes(),
-                        gas: 3 * ONE_TERAGAS,
-                        deposit: ONE_NEAR / 2,
-                    },
-                )],
+                vec![Action::FunctionCall(Box::new(FunctionCallAction {
+                    method_name: "set_public_key".to_string(),
+                    args: json!({
+                        "public_key": public_key_to_string(public_key),
+                    })
+                    .to_string()
+                    .into_bytes(),
+                    gas: 3 * ONE_TERAGAS,
+                    deposit: ONE_NEAR / 2,
+                }))],
             )
             .await?;
 
