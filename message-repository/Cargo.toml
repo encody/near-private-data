@@ -10,13 +10,9 @@ near-sdk = "5.5.0"
 near-sdk-contract-tools = "3.0.2"
 siphasher = "0.3.10"
 
+[dependencies.borsh]
+version = "*"
+features = ["derive", "unstable__schema"]
+
 [lib]
 crate-type = ["cdylib"]
-
-[profile.release]
-codegen-units = 1
-debug = false
-lto = true
-opt-level = "z"
-overflow-checks = true
-panic = "abort"

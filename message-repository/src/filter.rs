@@ -1,9 +1,34 @@
-use std::hash::Hasher;
+use std::{collections::BTreeMap, hash::Hasher};
 
 use cuckoofilter::{CuckooFilter, ExportedCuckooFilter};
-use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
+use near_sdk::borsh::{
+    schema::{Declaration, Definition},
+    BorshDeserialize, BorshSchema, BorshSerialize,
+};
 
 pub struct BorshCuckooFilter<H>(pub CuckooFilter<H>);
+
+mod dummy_schema {
+    use super::*;
+
+    #[allow(dead_code)]
+    #[derive(BorshSchema)]
+    #[borsh(crate = "near_sdk::borsh")]
+    pub struct ExportedCuckooFilter {
+        pub length: u32,
+        pub values: Vec<u8>,
+    }
+}
+
+impl<H> BorshSchema for BorshCuckooFilter<H> {
+    fn add_definitions_recursively(definitions: &mut BTreeMap<Declaration, Definition>) {
+        dummy_schema::ExportedCuckooFilter::add_definitions_recursively(definitions);
+    }
+
+    fn declaration() -> Declaration {
+        "BorshCuckooFilter".into()
+    }
+}
 
 impl<H> BorshSerialize for BorshCuckooFilter<H>
 where
@@ -11,7 +36,7 @@ where
 {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let exported = self.0.export();
-        exported.length.serialize(writer)?;
+        (exported.length as u32).serialize(writer)?;
         exported.values.serialize(writer)?;
         Ok(())
     }
