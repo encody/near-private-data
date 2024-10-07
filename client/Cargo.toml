@@ -1,7 +1,15 @@
 [package]
 edition = "2021"
-name = "near-private-data-client"
+name = "fc-client"
 version = "0.1.0"
+
+[lib]
+name = "fc_client"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fc"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.69"
@@ -30,3 +38,4 @@ x25519-dalek = "1"
 
 [dev-dependencies]
 near-workspaces = { version = "0.14", features = ["unstable"] }
+data-encoding = "2.6"

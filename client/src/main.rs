@@ -17,22 +17,15 @@ use serde::{Deserialize, Serialize};
 use tokio::{select, time::sleep};
 use x25519_dalek::StaticSecret;
 
-use crate::{
+use fc_client::{
     combined::CombinedMessageStream,
-    line_editor::LineEditor,
     messenger::{DecryptedMessage, Messenger},
     wallet::Wallet,
 };
 
-pub mod channel;
-pub mod combined;
-pub mod group;
-pub mod highlight;
-pub mod key_registry;
-pub mod line_editor;
-pub mod message_repository;
-pub mod messenger;
-pub mod wallet;
+mod highlight;
+mod line_editor;
+use line_editor::LineEditor;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Environment {
@@ -134,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
     writeln!(
         &stdout,
         "Welcome to the {} (test version)",
-        style("NEAR Private Data Messenger").magenta(),
+        style("FChan Messenger").magenta(),
     )
     .unwrap();
 

@@ -134,7 +134,7 @@ impl PairChannel {
 }
 
 fn u32_to_nonce(u: u32) -> Nonce {
-    Nonce::from_exact_iter([u.to_le_bytes(), [0u8; 4], [0u8; 4]].concat().into_iter()).unwrap()
+    Nonce::from_exact_iter([u.to_le_bytes(), [0u8; 4], [0u8; 4]].concat()).unwrap()
 }
 
 #[cfg(test)]

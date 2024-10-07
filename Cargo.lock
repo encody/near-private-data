@@ -742,6 +742,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-encoding"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
+
+[[package]]
 name = "debugid"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1011,6 +1017,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e51093e27b0797c359783294ca4f0a911c270184cb10f85783b118614a1501be"
 dependencies = [
  "instant",
+]
+
+[[package]]
+name = "fc-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64ct",
+ "bincode",
+ "chacha20poly1305",
+ "chrono",
+ "console",
+ "crossterm 0.26.1",
+ "data-encoding",
+ "dialoguer",
+ "dotenvy",
+ "ed25519-dalek 1.0.1",
+ "envy",
+ "futures",
+ "near-crypto",
+ "near-jsonrpc-client",
+ "near-jsonrpc-primitives",
+ "near-primitives",
+ "near-workspaces",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "sha2 0.10.6",
+ "tokio",
+ "tui",
+ "x25519-dalek",
+]
+
+[[package]]
+name = "fc-message-repository-contract"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "cuckoofilter",
+ "near-sdk",
+ "near-sdk-contract-tools",
+ "siphasher",
+]
+
+[[package]]
+name = "fc-public-key-registry-contract"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+ "near-sdk-contract-tools",
 ]
 
 [[package]]
@@ -2017,55 +2073,6 @@ dependencies = [
  "serde_repr",
  "sha2 0.10.6",
  "thiserror",
-]
-
-[[package]]
-name = "near-private-data-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64ct",
- "bincode",
- "chacha20poly1305",
- "chrono",
- "console",
- "crossterm 0.26.1",
- "dialoguer",
- "dotenvy",
- "ed25519-dalek 1.0.1",
- "envy",
- "futures",
- "near-crypto",
- "near-jsonrpc-client",
- "near-jsonrpc-primitives",
- "near-primitives",
- "near-workspaces",
- "rand 0.7.3",
- "serde",
- "serde_json",
- "sha2 0.10.6",
- "tokio",
- "tui",
- "x25519-dalek",
-]
-
-[[package]]
-name = "near-private-data-message-repository-contract"
-version = "0.1.0"
-dependencies = [
- "borsh",
- "cuckoofilter",
- "near-sdk",
- "near-sdk-contract-tools",
- "siphasher",
-]
-
-[[package]]
-name = "near-private-data-public-key-registry-contract"
-version = "0.1.0"
-dependencies = [
- "near-sdk",
- "near-sdk-contract-tools",
 ]
 
 [[package]]

@@ -3,11 +3,15 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use near_workspaces::{network::Sandbox, Account, AccountId, Worker};
+use data_encoding::BASE64;
+use fc_client::{messenger::Messenger, wallet::Wallet};
+use near_workspaces::{network::Sandbox, Account, AccountId, Contract, Worker};
+use rand::rngs::OsRng;
 use serde_json::json;
 use tokio::sync::{OnceCell, RwLock};
 
-static WASM_CACHE: LazyLock<RwLock<HashMap<&str, Arc<OnceCell<&'static [u8]>>>>> =
+type WasmCacheEntry = Arc<OnceCell<&'static [u8]>>;
+static WASM_CACHE: LazyLock<RwLock<HashMap<&str, WasmCacheEntry>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 async fn load_wasm(path: &'static str) -> &'static [u8] {
@@ -18,7 +22,7 @@ async fn load_wasm(path: &'static str) -> &'static [u8] {
     let cell = if let Some(cell) = cell_option {
         cell
     } else {
-        let cell = Arc::new(OnceCell::new());
+        let cell = WasmCacheEntry::default();
         let mut write_lock = WASM_CACHE.write().await;
         write_lock.insert(path, Arc::clone(&cell));
         drop(write_lock);
@@ -34,18 +38,6 @@ async fn load_wasm(path: &'static str) -> &'static [u8] {
 }
 
 async fn prefixed_account(worker: &Worker<Sandbox>, prefix: &str) -> Account {
-    // pub async fn dev_generate(&self) -> (AccountId, SecretKey) {
-    //     let id = crate::rpc::tool::random_account_id();
-    //     let sk = SecretKey::from_seed(KeyType::ED25519, DEV_ACCOUNT_SEED);
-    //     (id, sk)
-    // }
-
-    // pub async fn dev_create_account(&self) -> Result<Account> {
-    //     let (id, sk) = self.dev_generate().await;
-    //     let account = self.create_tla(id.clone(), sk).await?;
-    //     Ok(account.into_result()?)
-    // }
-
     assert!(
         prefix.len() <= AccountId::MAX_LEN,
         "prefix longer than max account ID length",
@@ -59,6 +51,29 @@ async fn prefixed_account(worker: &Worker<Sandbox>, prefix: &str) -> Account {
     worker.create_tla(id, sk).await.unwrap().result
 }
 
+async fn deploy_with_prefix_and_init(
+    worker: &Worker<Sandbox>,
+    prefix: &str,
+    wasm: &[u8],
+) -> Contract {
+    let contract = prefixed_account(worker, prefix)
+        .await
+        .deploy(wasm)
+        .await
+        .unwrap()
+        .result;
+
+    contract
+        .call("new")
+        .args_json(json!({}))
+        .transact()
+        .await
+        .unwrap()
+        .unwrap();
+
+    contract
+}
+
 #[tokio::test]
 async fn happy_path() {
     let (worker, message_repository_wasm, key_registry_wasm) = tokio::join!(
@@ -67,43 +82,81 @@ async fn happy_path() {
         load_wasm("../key-registry/"),
     );
 
-    let (message_repository, key_registry) = tokio::join!(
-        async {
-            let c = prefixed_account(&worker, "msgrepo")
-                .await
-                .deploy(message_repository_wasm)
-                .await
-                .unwrap()
-                .result;
-
-            c.call("new")
-                .args_json(json!({}))
-                .transact()
-                .await
-                .unwrap()
-                .unwrap();
-
-            c
-        },
-        async {
-            let c = prefixed_account(&worker, "keyreg")
-                .await
-                .deploy(key_registry_wasm)
-                .await
-                .unwrap()
-                .result;
-
-            c.call("new")
-                .args_json(json!({}))
-                .transact()
-                .await
-                .unwrap()
-                .unwrap();
-
-            c
-        },
+    let (message_repository_contract, key_registry_contract, alice) = tokio::join!(
+        deploy_with_prefix_and_init(&worker, "msgrepo", message_repository_wasm),
+        deploy_with_prefix_and_init(&worker, "keyreg", key_registry_wasm),
+        prefixed_account(&worker, "alice"),
     );
 
-    println!("Message Repository: {}", message_repository.id());
-    println!("Key Registry: {}", key_registry.id());
+    let signer = near_crypto::InMemorySigner::from_secret_key(
+        alice.id().clone(),
+        alice.secret_key().to_string().parse().unwrap(),
+    );
+
+    let wallet = Arc::new(Wallet::new(
+        worker.rpc_addr(),
+        signer.account_id.clone(),
+        signer.into(),
+    ));
+
+    let alice_messenger_key = x25519_dalek::StaticSecret::new(OsRng);
+
+    let messenger = Arc::new(Messenger::new(
+        Arc::clone(&wallet),
+        alice_messenger_key.clone(),
+        key_registry_contract.id(),
+        message_repository_contract.id(),
+    ));
+
+    println!("Messenger created!");
+    println!("Syncing key...");
+
+    messenger.sync_key().await.unwrap();
+
+    let key_registry = KeyRegistry::new(&key_registry_contract);
+    assert_eq!(
+        key_registry.get_public_key(alice.id()).await,
+        x25519_dalek::PublicKey::from(&alice_messenger_key).as_bytes(),
+        "Could not retrieve key from key registry",
+    );
+    println!("Key synced!");
+}
+
+struct KeyRegistry<'a> {
+    contract: &'a Contract,
+}
+
+impl<'a> KeyRegistry<'a> {
+    pub fn new(contract: &'a Contract) -> Self {
+        Self { contract }
+    }
+
+    pub async fn get_public_key(&self, account_id: &AccountId) -> Vec<u8> {
+        let encoded = self
+            .contract
+            .view("get_public_key")
+            .args_json(json!({
+                "account_id": account_id,
+            }))
+            .await
+            .unwrap()
+            .json::<String>()
+            .unwrap();
+
+        BASE64.decode(encoded.as_bytes()).unwrap()
+    }
+
+    pub async fn set_public_key(&self, account: &Account, public_key: Option<&[u8]>) {
+        account
+            .call(self.contract.id(), "set_public_key")
+            .args_json(json!({
+                "public_key": public_key.map(|k| {
+                    data_encoding::BASE64.encode(k)
+                }),
+            }))
+            .transact()
+            .await
+            .unwrap()
+            .unwrap();
+    }
 }

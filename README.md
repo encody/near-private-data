@@ -1,8 +1,6 @@
-# NEAR Private Data
+# FChan
 
-Proof-of-concept for private data transmission on the NEAR blockchain.
-
-[More details (internal doc)](https://docs.google.com/document/d/1ddOorhJ8_qrCyoRUR3Xd2gfWwaPi0TizVCoAsQECzrU/edit?usp=sharing)
+Proof-of-concept for flexible channels protocol: private communications over public blockchains.
 
 ## Demo
 
@@ -21,7 +19,7 @@ MESSENGER_SECRET_KEY="<secret-key>"
 `MESSENGER_SECRET_KEY` is a base64-encoded x25591 secret. You can generate one by running the following command:
 
 ```text
-$ cargo test --package near-private-data-client --bin near-private-data-client -- tests::generate_messenger_secret_key --exact --nocapture --ignored
+$ cargo test --package fc-client --bin fc -- tests::generate_messenger_secret_key --exact --nocapture --ignored
 ...
 
 running 1 test
@@ -37,6 +35,6 @@ A test key registry is `dev-1677133604850-79852956982344`, and a test message re
 
 Then you can run `cargo run` from the `client/` directory and it should open the chat client.
 
-# Authors
+## Authors
 
-- Jacob Lindahl <jacob.lindahl@near.org> [@sudo_build](https://twitter.com/sudo_build)
+- Jacob Lindahl [@sudo_build](https://twitter.com/sudo_build)
