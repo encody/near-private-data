@@ -232,7 +232,7 @@ mod tests {
     #[test]
     #[ignore = "Use to generate test keys"]
     fn generate_messenger_secret_key() {
-        let messenger_secret_key = x25519_dalek::StaticSecret::new(OsRng);
+        let messenger_secret_key = x25519_dalek::StaticSecret::random_from_rng(OsRng);
         let secret_key_b64 = Base64::encode_string(&messenger_secret_key.to_bytes());
         println!("\"{secret_key_b64}\"");
     }

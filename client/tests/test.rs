@@ -99,7 +99,7 @@ async fn happy_path() {
         signer.into(),
     ));
 
-    let alice_messenger_key = x25519_dalek::StaticSecret::new(OsRng);
+    let alice_messenger_key = x25519_dalek::StaticSecret::random_from_rng(OsRng);
 
     let messenger = Arc::new(Messenger::new(
         Arc::clone(&wallet),
