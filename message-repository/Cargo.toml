@@ -1,5 +1,5 @@
 [package]
-authors = ["Jacob Lindahl <jacob.lindahl@near.org>"]
+authors = ["Jacob Lindahl <lindahl@prg.is.titech.ac.jp>"]
 edition = "2021"
 name = "fc-message-repository-contract"
 version = "0.1.0"

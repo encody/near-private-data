@@ -37,4 +37,4 @@ Then you can run `cargo run` from the `client/` directory and it should open the
 
 ## Authors
 
-- Jacob Lindahl [@sudo_build](https://twitter.com/sudo_build)
+- Jacob Lindahl <lindahl@prg.is.titech.ac.jp> [@sudo_build](https://twitter.com/sudo_build)
