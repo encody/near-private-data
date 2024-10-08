@@ -5,8 +5,8 @@ name = "fc-public-key-registry-contract"
 version = "0.1.0"
 
 [dependencies]
-near-sdk = "5.5.0"
-near-sdk-contract-tools = "3.0.2"
+near-sdk.workspace = true
+near-sdk-contract-tools.workspace = true
 
 [lib]
 crate-type = ["cdylib"]

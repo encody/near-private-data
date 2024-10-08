@@ -5,10 +5,10 @@ name = "fc-message-repository-contract"
 version = "0.1.0"
 
 [dependencies]
-cuckoofilter = "0.5.0"
-near-sdk = "5.5.0"
-near-sdk-contract-tools = "3.0.2"
-siphasher = "0.3.10"
+cuckoofilter.workspace = true
+near-sdk.workspace = true
+near-sdk-contract-tools.workspace = true
+siphasher.workspace = true
 
 [dependencies.borsh]
 version = "*"

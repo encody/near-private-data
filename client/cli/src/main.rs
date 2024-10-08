@@ -8,9 +8,9 @@ use std::{
     time::Duration,
 };
 
-use base64ct::{Base64, Encoding};
 use chrono::{Local, NaiveDateTime, TimeZone};
 use console::style;
+use data_encoding::BASE64;
 use near_jsonrpc_client::{NEAR_MAINNET_RPC_URL, NEAR_TESTNET_RPC_URL};
 use near_primitives::types::AccountId;
 use serde::{Deserialize, Serialize};
@@ -110,7 +110,8 @@ async fn main() -> anyhow::Result<()> {
         signer.into(),
     ));
 
-    let messenger_secret_key: [u8; 32] = Base64::decode_vec(&env.messenger_secret_key)
+    let messenger_secret_key: [u8; 32] = BASE64
+        .decode(env.messenger_secret_key.as_bytes())
         .unwrap()
         .try_into()
         .unwrap();
@@ -191,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
 
                     match command {
                         "/say" => {
-                            messenger.send(&correspondent, tail).await.unwrap();
+                            messenger.send_raw(&correspondent, tail).await.unwrap();
                         }
                         "/leave" => {
                             writeln!(&stdout, "\r{}.", highlight::text::control("Exiting chat")).unwrap();
@@ -221,19 +222,5 @@ async fn main() -> anyhow::Result<()> {
                 },
             };
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use base64ct::{Base64, Encoding};
-    use rand::rngs::OsRng;
-
-    #[test]
-    #[ignore = "Use to generate test keys"]
-    fn generate_messenger_secret_key() {
-        let messenger_secret_key = x25519_dalek::StaticSecret::random_from_rng(OsRng);
-        let secret_key_b64 = Base64::encode_string(&messenger_secret_key.to_bytes());
-        println!("\"{secret_key_b64}\"");
     }
 }

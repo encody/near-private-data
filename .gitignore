@@ -1,4 +1,4 @@
 /neardev
-/target
+**/target
 *.env
 .DS_Store

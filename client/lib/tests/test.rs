@@ -10,31 +10,30 @@ use rand::rngs::OsRng;
 use serde_json::json;
 use tokio::sync::{OnceCell, RwLock};
 
-type WasmCacheEntry = Arc<OnceCell<&'static [u8]>>;
-static WASM_CACHE: LazyLock<RwLock<HashMap<&str, WasmCacheEntry>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+enum ContractWasm {
+    MessageRepository,
+    KeyRegistry,
+}
 
-async fn load_wasm(path: &'static str) -> &'static [u8] {
-    let read_lock = WASM_CACHE.read().await;
-    let cell_option = read_lock.get(path).cloned();
-    drop(read_lock);
+impl ContractWasm {
+    async fn load(&self) -> &'static [u8] {
+        static MESSAGE_REPOSITORY_WASM: OnceCell<&'static [u8]> = OnceCell::const_new();
+        static KEY_REGISTRY_WASM: OnceCell<&'static [u8]> = OnceCell::const_new();
 
-    let cell = if let Some(cell) = cell_option {
-        cell
-    } else {
-        let cell = WasmCacheEntry::default();
-        let mut write_lock = WASM_CACHE.write().await;
-        write_lock.insert(path, Arc::clone(&cell));
-        drop(write_lock);
-        cell
-    };
+        let (cell, path) = match self {
+            ContractWasm::MessageRepository => (
+                &MESSAGE_REPOSITORY_WASM,
+                "../../contract/message-repository/",
+            ),
+            ContractWasm::KeyRegistry => (&KEY_REGISTRY_WASM, "../../contract/key-registry/"),
+        };
 
-    *cell
-        .get_or_init(|| async {
+        cell.get_or_init(|| async {
             Box::new(near_workspaces::compile_project(path).await.unwrap()).leak()
                 as &'static [u8]
         })
         .await
+    }
 }
 
 async fn prefixed_account(worker: &Worker<Sandbox>, prefix: &str) -> Account {
@@ -78,8 +77,8 @@ async fn deploy_with_prefix_and_init(
 async fn happy_path() {
     let (worker, message_repository_wasm, key_registry_wasm) = tokio::join!(
         async { near_workspaces::sandbox().await.unwrap() },
-        load_wasm("../message-repository/"),
-        load_wasm("../key-registry/"),
+        async { ContractWasm::MessageRepository.load().await },
+        async { ContractWasm::KeyRegistry.load().await },
     );
 
     let (message_repository_contract, key_registry_contract, alice) = tokio::join!(

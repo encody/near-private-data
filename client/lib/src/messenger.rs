@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{anyhow, bail};
 use near_primitives::types::AccountId;
-use tokio::sync::RwLock;
+use tokio::sync::RwLock; // TODO: can we remove?
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{
@@ -79,7 +79,9 @@ impl Messenger {
         Ok(())
     }
 
-    pub async fn send(
+    // pub async fn send(&self, recipient_id: &AccountId, text: &str) -> anyhow::Result<()> {}
+
+    pub async fn send_raw(
         &self,
         recipient_id: &AccountId,
         cleartext: impl AsRef<[u8]>,

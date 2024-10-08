@@ -1,0 +1,23 @@
+[package]
+edition = "2021"
+name = "fc-client"
+version = "0.1.0"
+
+[dependencies]
+anyhow.workspace = true
+chacha20poly1305.workspace = true
+data-encoding.workspace = true
+ed25519-dalek.workspace = true
+near-crypto.workspace = true
+near-jsonrpc-client.workspace = true
+near-jsonrpc-primitives.workspace = true
+near-primitives.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+x25519-dalek.workspace = true
+
+[dev-dependencies]
+near-workspaces.workspace = true

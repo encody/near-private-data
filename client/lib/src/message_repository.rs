@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::bail;
-use base64ct::{Base64, Encoding};
+use data_encoding::BASE64;
 use near_primitives::{
     transaction::{Action, FunctionCallAction},
     types::AccountId,
@@ -48,7 +48,7 @@ impl MessageRepository {
             .view(
                 self.account_id.clone(),
                 "get_message",
-                json!({ "sequence_hash": Base64::encode_string(sequence_hash) }),
+                json!({ "sequence_hash": BASE64.encode(sequence_hash) }),
             )
             .await?;
 
@@ -57,7 +57,7 @@ impl MessageRepository {
             _ => return Ok(None),
         };
 
-        let message = match Base64::decode_vec(&base64_encoded_message.message) {
+        let message = match BASE64.decode(base64_encoded_message.message.as_bytes()) {
             Ok(d) => d,
             Err(e) => bail!("Error decoding from base64: {}", e),
         };
@@ -76,7 +76,17 @@ impl MessageRepository {
         self.wallet
             .transact(
                 self.account_id.clone(),
-                vec![Action::FunctionCall(Box::new(FunctionCallAction{method_name:"publish".to_string(),args:json!({"sequence_hash":Base64::encode_string(sequence_hash),"message":Base64::encode_string(ciphertext),}).to_string().into_bytes(),gas:300*ONE_TERAGAS,deposit:ONE_NEAR,}))],
+                vec![Action::FunctionCall(Box::new(FunctionCallAction {
+                    method_name: "publish".to_string(),
+                    args: json!({
+                        "sequence_hash": BASE64.encode(sequence_hash),
+                        "message": BASE64.encode(ciphertext),
+                    })
+                    .to_string()
+                    .into_bytes(),
+                    gas: 300 * ONE_TERAGAS,
+                    deposit: ONE_NEAR,
+                }))],
             )
             .await?;
 

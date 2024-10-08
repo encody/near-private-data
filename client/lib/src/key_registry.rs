@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::bail;
-use base64ct::{Base64, Encoding};
+use data_encoding::BASE64;
 use near_primitives::{
     transaction::{Action, FunctionCallAction},
     types::AccountId,
@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::wallet::{Wallet, ONE_NEAR, ONE_TERAGAS};
 
 fn public_key_to_string(public_key: &x25519_dalek::PublicKey) -> String {
-    Base64::encode_string(public_key.as_bytes())
+    BASE64.encode(public_key.as_bytes())
 }
 
 pub struct KeyRegistry {
@@ -41,7 +41,7 @@ impl KeyRegistry {
             )
             .await?;
 
-        let response = match Base64::decode_vec(&response) {
+        let response = match BASE64.decode(response.as_bytes()) {
             Ok(v) => v,
             Err(e) => bail!("Could not decode: {}", e),
         };

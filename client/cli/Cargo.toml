@@ -1,0 +1,20 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fc-client.path = "../lib"
+
+anyhow.workspace = true
+chrono.workspace = true
+console.workspace = true
+data-encoding.workspace = true
+dotenvy.workspace = true
+envy.workspace = true
+near-crypto.workspace = true
+near-jsonrpc-client.workspace = true
+near-primitives.workspace = true
+serde.workspace = true
+tokio.workspace = true
+x25519-dalek.workspace = true
