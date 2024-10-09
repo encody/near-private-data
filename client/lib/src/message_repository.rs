@@ -9,10 +9,7 @@ use near_primitives::{
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::{
-    channel::{PairChannel, SequenceHashProducer},
-    wallet::{Wallet, ONE_NEAR, ONE_TERAGAS},
-};
+use crate::wallet::{Wallet, ONE_NEAR, ONE_TERAGAS};
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct EncryptedMessage {
@@ -26,6 +23,7 @@ pub struct EncryptedMessageBase64 {
     pub block_timestamp_ms: u64,
 }
 
+#[derive(Debug)]
 pub struct MessageRepository {
     wallet: Arc<Wallet>,
     account_id: AccountId,
@@ -91,19 +89,5 @@ impl MessageRepository {
             .await?;
 
         Ok(())
-    }
-
-    pub async fn discover_first_unused_nonce(&self, channel: &PairChannel) -> anyhow::Result<u32> {
-        // stupid linear search for now.
-        // obviously should use some sort of exponential bounds discovery and then binary search,
-        // but too lazy to do that now.
-        for i in 0.. {
-            let sequence_hash = channel.sequence_hash(i);
-            if self.get_message(&*sequence_hash).await?.is_none() {
-                return Ok(i);
-            }
-        }
-
-        bail!("Somehow you've sent {} messages", u32::MAX);
     }
 }

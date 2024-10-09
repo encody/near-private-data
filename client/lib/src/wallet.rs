@@ -13,6 +13,7 @@ use serde::de::DeserializeOwned;
 pub const ONE_TERAGAS: u64 = 10u64.pow(12);
 pub const ONE_NEAR: u128 = 10u128.pow(24);
 
+#[derive(Debug)]
 pub struct RpcClientWrapper {
     client: JsonRpcClient,
 }
@@ -54,6 +55,7 @@ impl RpcClientWrapper {
     }
 }
 
+#[derive(Debug)]
 pub struct Wallet {
     rpc: RpcClientWrapper,
     pub account_id: AccountId,

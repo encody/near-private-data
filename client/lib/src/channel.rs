@@ -12,7 +12,7 @@ pub type SequenceNumber = u32;
 macro_rules! thin_marker {
     ($name: ident, $target: ty, $as_ref: ty) => {
         #[derive(
-            serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, PartialOrd, Hash,
+            serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash,
         )]
         pub struct $name($target);
 
@@ -42,11 +42,29 @@ thin_marker!(CorrespondentId, [u8; 32], [u8]);
 thin_marker!(SequenceHash, [u8; 32], [u8]);
 
 pub trait Channel {
-    fn encrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>>;
+    fn encrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let cipher = ChaCha20Poly1305::new_from_slice(self.shared_secret())?;
+        let nonce = u32_to_nonce(nonce);
+        let ciphertext = match cipher.encrypt(&nonce, message) {
+            Ok(c) => c,
+            Err(e) => bail!(e),
+        };
+        Ok(ciphertext)
+    }
 
-    fn decrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>>;
+    fn decrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let cipher = ChaCha20Poly1305::new_from_slice(self.shared_secret())?;
+        let nonce = u32_to_nonce(nonce);
+        let cleartext = match cipher.decrypt(&nonce, message) {
+            Ok(c) => c,
+            Err(e) => bail!(e),
+        };
+        Ok(cleartext)
+    }
 
     fn secret_identifier(&self) -> &[u8; 256];
+
+    fn shared_secret(&self) -> &[u8; 32];
 }
 
 pub trait SequenceHashProducer {
@@ -55,7 +73,7 @@ pub trait SequenceHashProducer {
 
 impl<T: Channel> SequenceHashProducer for T {
     fn sequence_hash(&self, sequence_number: SequenceNumber) -> SequenceHash {
-        let hash_bytes: [u8; 32] = Sha256::new()
+        let hash_bytes: [u8; 32] = <Sha256 as Digest>::new()
             .chain_update(sequence_number.to_le_bytes())
             .chain_update(self.secret_identifier())
             .finalize()
@@ -78,24 +96,8 @@ impl Channel for PairChannel {
         &self.identifier
     }
 
-    fn encrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let cipher = ChaCha20Poly1305::new_from_slice(&self.shared_secret)?;
-        let nonce = u32_to_nonce(nonce);
-        let ciphertext = match cipher.encrypt(&nonce, message) {
-            Ok(c) => c,
-            Err(e) => bail!(e),
-        };
-        Ok(ciphertext)
-    }
-
-    fn decrypt(&self, nonce: u32, message: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let cipher = ChaCha20Poly1305::new_from_slice(&self.shared_secret)?;
-        let nonce = u32_to_nonce(nonce);
-        let cleartext = match cipher.decrypt(&nonce, message) {
-            Ok(c) => c,
-            Err(e) => bail!(e),
-        };
-        Ok(cleartext)
+    fn shared_secret(&self) -> &[u8; 32] {
+        &self.shared_secret
     }
 }
 

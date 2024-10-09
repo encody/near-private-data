@@ -1,14 +1,11 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::sync::Arc;
 
 use data_encoding::BASE64;
-use fc_client::{messenger::Messenger, wallet::Wallet};
+use fc_client::{combined::CombinedMessageStream, messenger::Messenger, wallet::Wallet};
 use near_workspaces::{network::Sandbox, Account, AccountId, Contract, Worker};
 use rand::rngs::OsRng;
 use serde_json::json;
-use tokio::sync::{OnceCell, RwLock};
+use tokio::sync::OnceCell;
 
 enum ContractWasm {
     MessageRepository,
@@ -73,23 +70,15 @@ async fn deploy_with_prefix_and_init(
     contract
 }
 
-#[tokio::test]
-async fn happy_path() {
-    let (worker, message_repository_wasm, key_registry_wasm) = tokio::join!(
-        async { near_workspaces::sandbox().await.unwrap() },
-        async { ContractWasm::MessageRepository.load().await },
-        async { ContractWasm::KeyRegistry.load().await },
-    );
-
-    let (message_repository_contract, key_registry_contract, alice) = tokio::join!(
-        deploy_with_prefix_and_init(&worker, "msgrepo", message_repository_wasm),
-        deploy_with_prefix_and_init(&worker, "keyreg", key_registry_wasm),
-        prefixed_account(&worker, "alice"),
-    );
-
+async fn create_messenger(
+    worker: &Worker<Sandbox>,
+    key_registry_contract_id: &AccountId,
+    message_repository_contract_id: &AccountId,
+    account: &Account,
+) -> Arc<Messenger> {
     let signer = near_crypto::InMemorySigner::from_secret_key(
-        alice.id().clone(),
-        alice.secret_key().to_string().parse().unwrap(),
+        account.id().clone(),
+        account.secret_key().to_string().parse().unwrap(),
     );
 
     let wallet = Arc::new(Wallet::new(
@@ -98,27 +87,108 @@ async fn happy_path() {
         signer.into(),
     ));
 
-    let alice_messenger_key = x25519_dalek::StaticSecret::random_from_rng(OsRng);
+    let messenger_key = x25519_dalek::StaticSecret::random_from_rng(OsRng);
 
     let messenger = Arc::new(Messenger::new(
         Arc::clone(&wallet),
-        alice_messenger_key.clone(),
-        key_registry_contract.id(),
-        message_repository_contract.id(),
+        messenger_key.clone(),
+        key_registry_contract_id,
+        message_repository_contract_id,
     ));
 
-    println!("Messenger created!");
-    println!("Syncing key...");
-
     messenger.sync_key().await.unwrap();
+
+    messenger
+}
+
+#[tokio::test]
+async fn happy_path() {
+    let (worker, message_repository_wasm, key_registry_wasm) = tokio::join!(
+        async { near_workspaces::sandbox().await.unwrap() },
+        async { ContractWasm::MessageRepository.load().await },
+        async { ContractWasm::KeyRegistry.load().await },
+    );
+
+    let (message_repository_contract, key_registry_contract, alice, bob) = tokio::join!(
+        deploy_with_prefix_and_init(&worker, "msgrepo", message_repository_wasm),
+        deploy_with_prefix_and_init(&worker, "keyreg", key_registry_wasm),
+        prefixed_account(&worker, "alice"),
+        prefixed_account(&worker, "bob"),
+    );
+
+    println!("Creating messengers & syncing keys...");
+
+    let (alice_messenger, bob_messenger) = tokio::join!(
+        create_messenger(
+            &worker,
+            key_registry_contract.id(),
+            message_repository_contract.id(),
+            &alice
+        ),
+        create_messenger(
+            &worker,
+            key_registry_contract.id(),
+            message_repository_contract.id(),
+            &bob
+        ),
+    );
 
     let key_registry = KeyRegistry::new(&key_registry_contract);
     assert_eq!(
         key_registry.get_public_key(alice.id()).await,
-        x25519_dalek::PublicKey::from(&alice_messenger_key).as_bytes(),
-        "Could not retrieve key from key registry",
+        alice_messenger.public_key().as_bytes(),
     );
-    println!("Key synced!");
+    assert_eq!(
+        key_registry.get_public_key(bob.id()).await,
+        bob_messenger.public_key().as_bytes(),
+    );
+    println!("Keys synced!");
+
+    println!("Registering correspondents...");
+    tokio::join!(
+        async {
+            alice_messenger
+                .register_correspondent(bob.id())
+                .await
+                .unwrap();
+        },
+        async {
+            bob_messenger
+                .register_correspondent(alice.id())
+                .await
+                .unwrap();
+        },
+    );
+    println!("Correspondents registered!");
+
+    println!("Sending messages...");
+    let alice_dm_with_bob = alice_messenger.direct_message(bob.id()).await.unwrap();
+    let mut alice_dm_with_bob_stream =
+        CombinedMessageStream::new([&alice_dm_with_bob.send, &alice_dm_with_bob.recv]);
+    alice_messenger
+        .send_raw(bob.id(), "message 1")
+        .await
+        .unwrap();
+
+    let (alice_message_1_sender_id, alice_message_1) =
+        alice_dm_with_bob_stream.next().await.unwrap().unwrap();
+    assert_eq!(alice_message_1_sender_id, alice.id());
+    assert_eq!(
+        String::from_utf8(alice_message_1.message).unwrap(),
+        "message 1",
+    );
+
+    // bob logs on...
+    let bob_dm_with_alice = bob_messenger.direct_message(alice.id()).await.unwrap();
+    let mut bob_dm_with_alice_stream =
+        CombinedMessageStream::new([&bob_dm_with_alice.send, &bob_dm_with_alice.recv]);
+    let (bob_message_1_sender_id, bob_message_1) =
+        bob_dm_with_alice_stream.next().await.unwrap().unwrap();
+    assert_eq!(bob_message_1_sender_id, alice.id());
+    assert_eq!(
+        String::from_utf8(bob_message_1.message).unwrap(),
+        "message 1",
+    );
 }
 
 struct KeyRegistry<'a> {
@@ -143,19 +213,5 @@ impl<'a> KeyRegistry<'a> {
             .unwrap();
 
         BASE64.decode(encoded.as_bytes()).unwrap()
-    }
-
-    pub async fn set_public_key(&self, account: &Account, public_key: Option<&[u8]>) {
-        account
-            .call(self.contract.id(), "set_public_key")
-            .args_json(json!({
-                "public_key": public_key.map(|k| {
-                    data_encoding::BASE64.encode(k)
-                }),
-            }))
-            .transact()
-            .await
-            .unwrap()
-            .unwrap();
     }
 }

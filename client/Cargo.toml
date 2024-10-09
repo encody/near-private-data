@@ -4,6 +4,7 @@ members = ["cli", "lib"]
 
 [workspace.dependencies]
 anyhow = "1.0.69"
+argon2 = "0.5.3"
 chacha20poly1305 = "0.10.1"
 chrono = "=0.4.31"
 console = "0.15.5"
@@ -11,6 +12,7 @@ data-encoding = "2.6"
 dotenvy = "0.15.6"
 ed25519-dalek = "2.1.1"
 envy = "0.4.2"
+hkdf = "0.12.4"
 near-crypto = "0.26.0"
 near-jsonrpc-client = "0.13.0"
 near-jsonrpc-primitives = "0.26.0"

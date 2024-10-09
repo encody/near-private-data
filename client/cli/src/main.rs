@@ -65,11 +65,8 @@ fn monitor_conversation(
 
     tokio::spawn({
         async move {
-            let conversation = messenger.conversation(&sender_id).await.unwrap();
-            let mut messages = CombinedMessageStream::new(
-                &messenger.message_repository,
-                [&conversation.send, &conversation.recv],
-            );
+            let conversation = messenger.direct_message(&sender_id).await.unwrap();
+            let mut messages = CombinedMessageStream::new([&conversation.send, &conversation.recv]);
 
             while alive.load(Ordering::SeqCst) {
                 if let Some((sender, message)) = messages.next().await.unwrap() {
