@@ -1,23 +1,38 @@
 use std::sync::Arc;
 
 use sha2::{Digest, Sha256};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::{
-    channel::{Channel, CorrespondentId, SequenceHash, SequenceHashProducer},
+    channel::{Channel, CorrespondentId, SequenceHashProducer},
     message_repository::MessageRepository,
     messenger::{DecryptedMessage, MessageStream},
 };
 
 pub struct Group {
+    message_repository: Arc<MessageRepository>,
+    send_messages_from_member_index: usize,
     members: Vec<CorrespondentId>,
+    next_message_index: RwLock<Vec<u32>>,
     shared_secret: [u8; 32],
     identifier: [u8; 256],
 }
 
 impl Group {
-    pub fn new(mut members: Vec<CorrespondentId>, shared_secret: [u8; 32], context: &[u8]) -> Self {
+    pub fn new(
+        message_repository: Arc<MessageRepository>,
+        send_messages_from_member: CorrespondentId,
+        mut other_members: Vec<CorrespondentId>,
+        shared_secret: [u8; 32],
+        context: &[u8],
+    ) -> Self {
+        other_members.push(send_messages_from_member.clone());
+        let mut members = other_members;
         members.sort();
+        let send_messages_from_member_index = members
+            .iter()
+            .position(|m| m == &send_messages_from_member)
+            .unwrap(); // unwrap ok because we know this item exists in the vec
 
         let mut members_hash = <Sha256 as Digest>::new();
         for member in members.iter() {
@@ -32,8 +47,14 @@ impl Group {
         identifier[64..96].copy_from_slice(&shared_secret);
         identifier[96..128].copy_from_slice(&context_hash);
 
+        let next_message_index =
+            RwLock::new(members.iter().enumerate().map(|(i, _)| i as u32).collect());
+
         Self {
+            message_repository,
             members,
+            send_messages_from_member_index,
+            next_message_index,
             shared_secret,
             identifier,
         }
@@ -50,20 +71,53 @@ impl Group {
         self.members.len() as u32 * message_index + correspondent_index
     }
 
-    pub fn streams(
-        self: Arc<Self>,
-        message_repository: Arc<MessageRepository>,
-    ) -> Vec<GroupStream> {
+    pub async fn receive_next_for(
+        &self,
+        correspondent_index: u32,
+    ) -> anyhow::Result<Option<DecryptedMessage>> {
+        let message_index = self.next_message_index.read().await[correspondent_index as usize];
+        let nonce = self.get_nonce_for_message(message_index, correspondent_index);
+        let sequence_hash = self.sequence_hash(nonce);
+
+        let response = self.message_repository.get_message(&*sequence_hash).await?;
+
+        let Some(ciphertext) = response else {
+            return Ok(None);
+        };
+
+        let cleartext = self.decrypt(nonce, &ciphertext.message)?;
+
+        self.next_message_index.write().await[correspondent_index as usize] += 1;
+
+        Ok(Some(DecryptedMessage {
+            message: cleartext,
+            block_timestamp_ms: ciphertext.block_timestamp_ms,
+        }))
+    }
+
+    pub fn streams(&self) -> Vec<GroupStream> {
         self.members
             .iter()
             .enumerate()
-            .map(|(i, _c)| GroupStream {
-                group: Arc::clone(&self),
+            .map(|(i, _)| GroupStream {
+                group: self,
                 target_correspondent_index: i as u32,
-                next_message_index: Default::default(),
-                message_repository: Arc::clone(&message_repository),
             })
             .collect()
+    }
+
+    pub async fn send(
+        &self,
+        cleartext: impl AsRef<[u8]>,
+    ) -> anyhow::Result<()> {
+        let message_index = self.next_message_index.read().await[self.send_messages_from_member_index];
+        let nonce = self.get_nonce_for_message(message_index, self.send_messages_from_member_index as u32);
+        let sequence_hash = self.sequence_hash(nonce);
+        let ciphertext = self.encrypt(nonce, cleartext.as_ref())?;
+        self.message_repository
+            .publish_message(&*sequence_hash, &ciphertext)
+            .await?;
+        Ok(())
     }
 }
 
@@ -77,47 +131,21 @@ impl Channel for Group {
     }
 }
 
-pub struct GroupStream {
-    group: Arc<Group>,
+pub struct GroupStream<'a> {
+    group: &'a Group,
     target_correspondent_index: u32,
-    next_message_index: Arc<Mutex<u32>>,
-    message_repository: Arc<MessageRepository>,
 }
 
-impl MessageStream for GroupStream {
+impl<'a> MessageStream for GroupStream<'a> {
     async fn receive_next(&self) -> anyhow::Result<Option<DecryptedMessage>> {
-        let nonce = self.get_next_nonce().await;
-        let sequence_hash = self.get_sequence_hash(nonce).await;
-
-        let response = self.message_repository.get_message(&*sequence_hash).await?;
-
-        let Some(ciphertext) = response else {
-            return Ok(None);
-        };
-
-        let cleartext = self.group.decrypt(nonce, &ciphertext.message)?;
-
-        self.next_nonce().await;
-
-        Ok(Some(DecryptedMessage {
-            message: cleartext,
-            block_timestamp_ms: ciphertext.block_timestamp_ms,
-        }))
+        self.group
+            .receive_next_for(self.target_correspondent_index)
+            .await
     }
 }
 
-impl GroupStream {
-    async fn get_sequence_hash(&self, nonce: u32) -> SequenceHash {
-        self.group.sequence_hash(nonce)
-    }
-
-    async fn get_next_nonce(&self) -> u32 {
-        let message_index = *self.next_message_index.lock().await;
-        self.group
-            .get_nonce_for_message(message_index, self.target_correspondent_index)
-    }
-
-    async fn next_nonce(&self) {
-        *self.next_message_index.lock().await += 1;
+impl<'a> GroupStream<'a> {
+    pub fn correspondent_id(&self) -> &CorrespondentId {
+        &self.group.members[self.target_correspondent_index as usize]
     }
 }

@@ -144,50 +144,36 @@ async fn happy_path() {
     );
     println!("Keys synced!");
 
-    println!("Registering correspondents...");
-    tokio::join!(
-        async {
-            alice_messenger
-                .register_correspondent(bob.id())
-                .await
-                .unwrap();
-        },
-        async {
-            bob_messenger
-                .register_correspondent(alice.id())
-                .await
-                .unwrap();
-        },
-    );
-    println!("Correspondents registered!");
+    let alice_group_with_bob = alice_messenger.direct_message(bob.id()).await.unwrap();
+    let bob_group_with_alice = bob_messenger.direct_message(alice.id()).await.unwrap();
+    let mut bob_group_receive = CombinedMessageStream::new(bob_group_with_alice.streams());
 
-    println!("Sending messages...");
-    let alice_dm_with_bob = alice_messenger.direct_message(bob.id()).await.unwrap();
-    let mut alice_dm_with_bob_stream =
-        CombinedMessageStream::new([&alice_dm_with_bob.send, &alice_dm_with_bob.recv]);
-    alice_messenger
-        .send_raw(bob.id(), "message 1")
-        .await
-        .unwrap();
+    alice_group_with_bob.send("dm 1").await.unwrap();
 
-    let (alice_message_1_sender_id, alice_message_1) =
-        alice_dm_with_bob_stream.next().await.unwrap().unwrap();
-    assert_eq!(alice_message_1_sender_id, alice.id());
+    let (bob_received_dm_1_from, bob_received_dm_1_message) =
+        bob_group_receive.next().await.unwrap().unwrap();
+
     assert_eq!(
-        String::from_utf8(alice_message_1.message).unwrap(),
-        "message 1",
+        &**bob_received_dm_1_from,
+        alice_messenger.public_key().as_bytes(),
+    );
+    assert_eq!(
+        String::from_utf8(bob_received_dm_1_message.message).unwrap(),
+        "dm 1",
     );
 
-    // bob logs on...
-    let bob_dm_with_alice = bob_messenger.direct_message(alice.id()).await.unwrap();
-    let mut bob_dm_with_alice_stream =
-        CombinedMessageStream::new([&bob_dm_with_alice.send, &bob_dm_with_alice.recv]);
-    let (bob_message_1_sender_id, bob_message_1) =
-        bob_dm_with_alice_stream.next().await.unwrap().unwrap();
-    assert_eq!(bob_message_1_sender_id, alice.id());
+    let mut alice_group_receive = CombinedMessageStream::new(alice_group_with_bob.streams());
+
+    let (alice_received_dm_1_from, alice_received_dm_1_message) =
+        alice_group_receive.next().await.unwrap().unwrap();
+
     assert_eq!(
-        String::from_utf8(bob_message_1.message).unwrap(),
-        "message 1",
+        &**alice_received_dm_1_from,
+        alice_messenger.public_key().as_bytes(),
+    );
+    assert_eq!(
+        String::from_utf8(alice_received_dm_1_message.message).unwrap(),
+        "dm 1",
     );
 }
 

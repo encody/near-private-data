@@ -60,7 +60,7 @@ impl KeyRegistry {
                     })
                     .to_string()
                     .into_bytes(),
-                    gas: 3 * ONE_TERAGAS,
+                    gas: 5 * ONE_TERAGAS,
                     deposit: ONE_NEAR / 2,
                 }))],
             )

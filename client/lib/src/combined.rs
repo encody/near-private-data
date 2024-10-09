@@ -1,9 +1,11 @@
-use near_primitives::types::AccountId;
-
-use crate::messenger::{DecryptedMessage, MessageStream, PairStream};
+use crate::{
+    channel::CorrespondentId,
+    group::GroupStream,
+    messenger::{DecryptedMessage, MessageStream},
+};
 
 struct BufferedMessageStream<'a> {
-    stream: &'a PairStream,
+    stream: GroupStream<'a>,
     next_message: Option<DecryptedMessage>,
 }
 
@@ -12,7 +14,7 @@ pub struct CombinedMessageStream<'a> {
 }
 
 impl<'a> CombinedMessageStream<'a> {
-    pub fn new(streams: impl IntoIterator<Item = &'a PairStream>) -> Self {
+    pub fn new(streams: impl IntoIterator<Item = GroupStream<'a>>) -> Self {
         Self {
             streams: streams
                 .into_iter()
@@ -24,7 +26,9 @@ impl<'a> CombinedMessageStream<'a> {
         }
     }
 
-    pub async fn next(&mut self) -> anyhow::Result<Option<(&'a AccountId, DecryptedMessage)>> {
+    pub async fn next(
+        &mut self,
+    ) -> anyhow::Result<Option<(&CorrespondentId, DecryptedMessage)>> {
         let mut stream_index_with_oldest_message = None;
 
         for (i, stream) in self.streams.iter_mut().enumerate() {
@@ -54,7 +58,7 @@ impl<'a> CombinedMessageStream<'a> {
         Ok(stream_index_with_oldest_message.map(|(_, i)| {
             let stream = &mut self.streams[i];
             let next_message = stream.next_message.take().unwrap();
-            (&stream.stream.sender, next_message)
+            (stream.stream.correspondent_id(), next_message)
         }))
     }
 }

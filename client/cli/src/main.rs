@@ -18,7 +18,9 @@ use tokio::{select, time::sleep};
 use x25519_dalek::StaticSecret;
 
 use fc_client::{
+    channel::CorrespondentId,
     combined::CombinedMessageStream,
+    group::Group,
     messenger::{DecryptedMessage, Messenger},
     wallet::Wallet,
 };
@@ -47,11 +49,10 @@ fn network_rpc_url(network: Option<String>) -> String {
 }
 
 fn monitor_conversation(
-    messenger: Arc<Messenger>,
-    sender_id: AccountId,
+    group: Arc<Group>,
 ) -> (
     impl Fn(),
-    tokio::sync::mpsc::Receiver<(AccountId, DecryptedMessage)>,
+    tokio::sync::mpsc::Receiver<(CorrespondentId, DecryptedMessage)>,
 ) {
     let alive = Arc::new(AtomicBool::new(true));
     let (send, recv) = tokio::sync::mpsc::channel(1);
@@ -65,8 +66,7 @@ fn monitor_conversation(
 
     tokio::spawn({
         async move {
-            let conversation = messenger.direct_message(&sender_id).await.unwrap();
-            let mut messages = CombinedMessageStream::new([&conversation.send, &conversation.recv]);
+            let mut messages = CombinedMessageStream::new(group.streams());
 
             while alive.load(Ordering::SeqCst) {
                 if let Some((sender, message)) = messages.next().await.unwrap() {
@@ -164,12 +164,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .unwrap();
 
-        messenger
-            .register_correspondent(&correspondent)
-            .await
-            .unwrap();
+        let group = Arc::new(messenger.direct_message(&correspondent).await.unwrap());
 
-        let (kill, mut recv) = monitor_conversation(Arc::clone(&messenger), correspondent.clone());
+        let (kill, mut recv) = monitor_conversation(Arc::clone(&group));
 
         line_editor.set_prompt(format!("{}> ", highlight::account::me(&wallet.account_id)));
 
@@ -189,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
 
                     match command {
                         "/say" => {
-                            messenger.send_raw(&correspondent, tail).await.unwrap();
+                            group.send(tail).await.unwrap();
                         }
                         "/leave" => {
                             writeln!(&stdout, "\r{}.", highlight::text::control("Exiting chat")).unwrap();
@@ -203,6 +200,7 @@ async fn main() -> anyhow::Result<()> {
                 },
                 recv_message = recv.recv() => {
                     if let Some((sender_id, recv_message)) = recv_message {
+                        let sender_id = messenger.resolve_correspondent_id(&sender_id).await.unwrap();
                         let sender_styled = if sender_id == wallet.account_id {
                             highlight::account::me(&sender_id)
                         } else {

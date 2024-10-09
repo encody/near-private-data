@@ -1,18 +1,13 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use near_primitives::types::AccountId;
 use tokio::sync::RwLock; // TODO: can we remove?
 use x25519_dalek::{PublicKey, StaticSecret};
 
 use crate::{
-    channel::{Channel, CorrespondentId, PairChannel, SequenceHash, SequenceHashProducer},
-    key_registry::KeyRegistry,
-    message_repository::MessageRepository,
-    wallet::Wallet,
+    channel::CorrespondentId, group::Group, key_registry::KeyRegistry,
+    message_repository::MessageRepository, wallet::Wallet,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -21,6 +16,7 @@ pub struct DecryptedMessage {
     pub message: Vec<u8>,
 }
 
+// TODO: Message commands (invite to group, etc.)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuredMessage<const KEY_SIZE: usize> {
     pub next_key: [u8; KEY_SIZE],
@@ -72,12 +68,10 @@ fn structured_message_serialization() {
 }
 
 pub struct Messenger {
-    wallet: Arc<Wallet>,
     secret_key: StaticSecret,
     key_registry: KeyRegistry,
     correspondent_map: Arc<RwLock<HashMap<CorrespondentId, AccountId>>>,
     pub message_repository: Arc<MessageRepository>,
-    direct_messages: Arc<RwLock<HashMap<AccountId, Arc<DirectMessageConversation>>>>,
 }
 
 impl Messenger {
@@ -87,17 +81,32 @@ impl Messenger {
         key_registry_account_id: &AccountId,
         message_repository_account_id: &AccountId,
     ) -> Self {
+        let mut correspondent_map = HashMap::new();
+        correspondent_map.insert(
+            PublicKey::from(&messenger_secret_key).to_bytes().into(),
+            wallet.account_id.clone(),
+        );
+
         Self {
             secret_key: messenger_secret_key,
             key_registry: KeyRegistry::new(Arc::clone(&wallet), key_registry_account_id),
-            correspondent_map: Default::default(),
+            correspondent_map: Arc::new(RwLock::new(correspondent_map)),
             message_repository: Arc::new(MessageRepository::new(
                 Arc::clone(&wallet),
                 message_repository_account_id,
             )),
-            direct_messages: Default::default(),
-            wallet,
         }
+    }
+
+    pub async fn resolve_correspondent_id(
+        &self,
+        correspondent_id: &CorrespondentId,
+    ) -> Option<AccountId> {
+        self.correspondent_map
+            .read()
+            .await
+            .get(correspondent_id)
+            .cloned()
     }
 
     pub fn public_key(&self) -> PublicKey {
@@ -110,7 +119,7 @@ impl Messenger {
             .await
     }
 
-    pub async fn register_correspondent(&self, account_id: &AccountId) -> anyhow::Result<()> {
+    pub async fn direct_message(&self, account_id: &AccountId) -> anyhow::Result<Group> {
         let correspondent_public_key = self.key_registry.get_key_for(account_id).await?;
         let correspondent_public_key: [u8; 32] = match correspondent_public_key.try_into() {
             Ok(a) => a,
@@ -121,67 +130,19 @@ impl Messenger {
             .write()
             .await
             .insert(correspondent_id, account_id.clone());
-        let (send, recv) = PairChannel::pair(&self.secret_key, &correspondent_public_key.into());
-        let send = PairStream {
-            channel: send,
-            sender: self.wallet.account_id.clone(),
-            next_nonce: Default::default(),
-            message_repository: Arc::clone(&self.message_repository),
-        };
-        let recv = PairStream {
-            channel: recv,
-            sender: account_id.clone(),
-            next_nonce: Default::default(),
-            message_repository: Arc::clone(&self.message_repository),
-        };
-
-        self.direct_messages.write().await.insert(
-            account_id.clone(),
-            Arc::new(DirectMessageConversation { send, recv }),
+        let shared_secret = self
+            .secret_key
+            .diffie_hellman(&correspondent_public_key.into())
+            .to_bytes();
+        let group = Group::new(
+            Arc::clone(&self.message_repository),
+            self.public_key().to_bytes().into(),
+            vec![correspondent_public_key.into()],
+            shared_secret,
+            &[], // no context for direct message (?)
         );
-        Ok(())
-    }
 
-    // pub async fn send(&self, recipient_id: &AccountId, text: &str) -> anyhow::Result<()> {}
-
-    pub async fn send_raw(
-        &self,
-        recipient_id: &AccountId,
-        cleartext: impl AsRef<[u8]>,
-    ) -> anyhow::Result<()> {
-        let conversations = self.direct_messages.read().await;
-        let conversation = conversations
-            .get(recipient_id)
-            .ok_or_else(|| anyhow!("Unknown recipient: {}", recipient_id))?;
-        let nonce = conversation.send.get_next_nonce();
-        let sequence_hash = conversation.send.get_next_sequence_hash();
-        let ciphertext = conversation
-            .send
-            .channel
-            .encrypt(nonce, cleartext.as_ref())?;
-        // use base64ct::{Base64, Encoding};
-        // use console::style;
-        // eprintln!(
-        //     "Sending message with sequence hash {}",
-        //     style(Base64::encode_string(&*sequence_hash)).yellow()
-        // );
-        self.message_repository
-            .publish_message(&*sequence_hash, &ciphertext)
-            .await?;
-
-        Ok(())
-    }
-
-    pub async fn direct_message(
-        &self,
-        correspondent_id: &AccountId,
-    ) -> anyhow::Result<Arc<DirectMessageConversation>> {
-        let conversations = self.direct_messages.read().await;
-        let conversation = conversations
-            .get(correspondent_id)
-            .ok_or_else(|| anyhow!("Unknown correspondent: {}", correspondent_id))?;
-
-        Ok(Arc::clone(conversation))
+        Ok(group)
     }
 }
 
@@ -189,54 +150,4 @@ pub trait MessageStream {
     fn receive_next(
         &self,
     ) -> impl std::future::Future<Output = anyhow::Result<Option<DecryptedMessage>>> + Send;
-}
-
-#[derive(Clone, Debug)]
-pub struct PairStream {
-    channel: PairChannel,
-    pub sender: AccountId,
-    next_nonce: Arc<Mutex<u32>>,
-    message_repository: Arc<MessageRepository>,
-}
-
-impl MessageStream for PairStream {
-    async fn receive_next(&self) -> anyhow::Result<Option<DecryptedMessage>> {
-        let nonce = self.get_next_nonce();
-        let sequence_hash = self.get_next_sequence_hash();
-
-        let response = self.message_repository.get_message(&*sequence_hash).await?;
-
-        let ciphertext = match response {
-            Some(m) => m,
-            None => return Ok(None),
-        };
-
-        let cleartext = self.channel.decrypt(nonce, &ciphertext.message)?;
-
-        self.advance_nonce();
-
-        Ok(Some(DecryptedMessage {
-            message: cleartext,
-            block_timestamp_ms: ciphertext.block_timestamp_ms,
-        }))
-    }
-}
-
-impl PairStream {
-    pub fn get_next_sequence_hash(&self) -> SequenceHash {
-        self.channel.sequence_hash(self.get_next_nonce())
-    }
-
-    pub fn get_next_nonce(&self) -> u32 {
-        *self.next_nonce.lock().unwrap()
-    }
-
-    pub fn advance_nonce(&self) {
-        *self.next_nonce.lock().unwrap() += 1;
-    }
-}
-
-pub struct DirectMessageConversation {
-    pub send: PairStream,
-    pub recv: PairStream,
 }
