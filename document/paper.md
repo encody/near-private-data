@@ -54,15 +54,17 @@ However, privacy of these data is not sufficient to make a usable protocol. Ther
 
 ## Conversation history
 
-One of the issues experienced by many protocols in this sector is that while the messaging protocol may be clearly cryptographically and mathematically sound, correctly implementing such fancy techniques deniability, if transcripts of the conversation are revealed, those hard mathematical evidences do very little to effectively recuse a conversant from a conversation. A @jefferys_session_2020
+One of the issues experienced by many protocols in this sector is that while the messaging protocol may be clearly cryptographically and mathematically sound, correctly implementing such fancy techniques as deniability, if transcripts of the conversation are revealed, those hard mathematical evidences do very little to effectively recuse a conversant from a conversation. This has led some protocols to discount such techniques entirely. [@jefferys_session_2020]
 
-This has led some protocols
+The experimental techniques presented in this paper do not endeavor to implement complete deniability in the traditional sense, due in large part to the nature of the invariants required by the infrastructure upon which they depend. That is to say, it would violate the fundamental contract of an "append-only public ledger" if two plausible transcripts could be provided that purport a different sequences of appends.
+
+Rather, we take a different approach. One of the problems with simply implementing something like the Signal Double-Ratchet algorithm is that while it hides the _content_ of the messages between conversants Alice and Bob, it does not hide the fact that Alice and Bob are 1) conversing, or 2) conversing with each other. The flexible channels protocol in itself does attempt to conceal this information. However, it should be duly noted that the protocol as presented assumes the existence of some sort of public-key infrastructure (PKI). PKIs are usually publicly-accessible, so the presence of a user's public key in the PKI could belie their usage of the protocol. This issue can be mitigated somewhat by 1) using a PKI that has sufficient quantity of users for a diverse variety of applications, or 2) not using a PKI, and instead manually facilitating public key exchanges (e.g. by meeting in person, scanning QR codes, etc.).
 
 ## Forward secrecy
 
 # Protocol
 
-The key insight of this paper is the channel and sequence hash construction.
+The key insights of this paper are the channel and sequence hash constructions.
 
 A channel is a total-ordered stream of messages. It consists of membership list (e.g. a sender and a receiver, or multiple members of a group) and a shared secret (derivable by Diffie-Hellman or any other method of establishing a shared secret).
 
@@ -111,3 +113,7 @@ The next phase of development will focus on multi-device messaging and group mes
 ## Phase 3: Library
 
 The final phase of development will be to create a library that can be used by other applications. This will be written in Rust, and will be published to crates.io.
+
+\newpage
+
+# References
