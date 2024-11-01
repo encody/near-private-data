@@ -1,14 +1,9 @@
 all: paper
 
 paper:
-	@pandoc -s -F pandoc-crossref --natbib meta.yaml --template=mytemplate.tex -N \
-	 -f markdown -t latex+raw_tex+tex_math_dollars+citations -o main.tex main.md
-	@pdflatex main.tex &> /dev/null
-	@bibtex main &> /dev/null
-	@pdflatex main.tex &> /dev/null
-	@pdflatex main.tex &> /dev/null
+	pandoc -s -N -f markdown --template=./eisvogel.latex --citeproc -o paper.pdf paper.md
 
 clean:
-	rm main.aux main.tex main.log main.bbl main.blg main.out
+	rm paper.pdf
 
 .PHONY: all clean paper
