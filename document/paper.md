@@ -1,5 +1,5 @@
 ---
-title: Preventing Metadata Leakage in Communication over Public Channels
+title: "Flexible Channels: Preventing Metadata Leakage in Communication over Public Channels"
 titlepage: true
 author:
   - Jacob Lindahl <lindahl@prg.is.titech.ac.jp>
