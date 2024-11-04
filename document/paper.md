@@ -28,7 +28,7 @@ bibliography: ./biblio.bib
 
 # Abstract
 
-With trustless technologies becoming ever-more prevalent in the modern Internet, there arises the need for a new type of private messaging protocol: one that preserves the privacy of its users to the fullest extent possible without the need to trust any third party. Current implementations of privacy-focused messaging protocols suffer from a number of problems, ranging from metadata leakage to usability issues. We describe a new message transmission protocol that addresses metadata leakage and broadcast efficiency.
+Public blockchain ledgers are, at first glance, antithetical to privacy: all data are recorded permanently and publicly. While this is necessary, in many cases, to trustlessly verify the execution of the virtual machine, by the same token, blockchains are not often used to directly store sensitive information. However, popular blockchains do provide data distribution (data availability), historical execution auditability, and data accessibility that have interesting implications for encrypted messaging. The disadvantages for using a blockchain as the underlying middleman for an encrypted messaging system are clear and numerous&mdash;cost, privacy, efficiency, etc. We present a protocol that attempts to mitigate these issues while taking advantage of the unique mechanisms that blockchains do provide, and provide recommendations for similar projects.
 
 # Definitions
 
@@ -58,15 +58,15 @@ One of the issues experienced by many protocols in this sector is that while the
 
 The experimental techniques presented in this paper do not endeavor to implement complete deniability in the traditional sense, due in large part to the nature of the invariants required by the infrastructure upon which they depend. That is to say, it would violate the fundamental contract of an "append-only public ledger" if two plausible transcripts could be provided that purport a different sequences of appends.
 
-Rather, we take a different approach. One of the problems with simply implementing something like the Signal Double-Ratchet algorithm is that while it hides the _content_ of the messages between conversants Alice and Bob, it does not hide the fact that Alice and Bob are 1) conversing, or 2) conversing with each other. The flexible channels protocol in itself does attempt to conceal this information. However, it should be duly noted that the protocol as presented assumes the existence of some sort of public-key infrastructure (PKI). PKIs are usually publicly-accessible, so the presence of a user's public key in the PKI could belie their usage of the protocol. This issue can be mitigated somewhat by 1) using a PKI that has sufficient quantity of users for a diverse variety of applications, or 2) not using a PKI, and instead manually facilitating public key exchanges (e.g. by meeting in person, scanning QR codes, etc.).
+Rather, we take a different approach. One of the problems with simply implementing something like the Signal Double-Ratchet algorithm is that while it hides the _content_ of the messages between conversants Alice and Bob, it does not hide the fact that Alice and Bob are 1) conversing, or 2) conversing with each other. The flexible channels protocol in itself does attempt to conceal this information. However, it should be duly noted that the protocol as presented assumes the existence of some sort of public-key infrastructure (PKI). PKIs are usually publicly-accessible, so the presence of a user's public key in the PKI could belie their usage of the protocol. This issue can be mitigated somewhat by 1) using a PKI that has sufficient quantity of users for a diverse variety of applications, or 2) not using a public PKI, and instead manually facilitating public key exchanges (e.g. by meeting in person, scanning QR codes, etc.).
 
-## Forward secrecy
+# Prior art
 
 # Protocol
 
 The key insights of this paper are the channel and sequence hash constructions.
 
-A channel is a total-ordered stream of messages. It consists of membership list (e.g. a sender and a receiver, or multiple members of a group) and a shared secret (derivable by Diffie-Hellman or any other method of establishing a shared secret).
+A channel is a total-ordered stream of messages. It consists of membership list (one or more members of a group) and a shared secret (derivable by Diffie-Hellman or any other method of establishing a shared secret).
 
 A channel has a deterministic sequence hash generator. Hashing the fields of the channel, together with a nonce, produces a "sequence hash." This sequence hash can only be recreated by parties privy to the channel's shared secret, yet it does not reveal the shared secret. The sequence hash serves as the identifying key of a message sent to the message repository.
 
@@ -98,13 +98,31 @@ where $n$ is the sequence number of the message.
 
 Once a sequence hash has been generated, the sender can post a payload $(h_{s \rightarrow r}^n, c)$ to the message repository, where $c$ is the ciphertext of the message, encrypted with the shared secret $k$. Once the message has posted, the receiver, knowing the shared secret $k$ and the index of last message he saw $n-1$, can find the message keyed by $h_{s \rightarrow r}^n$ in the message repository, and decrypt it.
 
+## Group abstractions
+
+When multiple actors have read and write access to a channel by virtue of knowing the channel shared secret, how do they synchronize which channel member is entitled to use which nonces?
+
+## Garbage messages
+
+## Payload size
+
+## Proxies
+
+## Ensuring proxy honesty
+
+## Dandelion-style routing
+
+## Message notifications
+
+## Message receiving
+
 # Development
 
 A reference implementation for this paper is currently in development. The following is a proposal for the development of the protocol.
 
 ## Phase 1: Proof of Concept
 
-The basic proof of concept has already been completed and shown to work in a limited capacity. The proof of concept is a simple command-line application that allows for $1:1$ messaging between two parties. The proof of concept is written in Rust, and uses the _Dalek_ libraries for cryptographic primitives, as well as _ChaCha20-Poly1305_ for encryption.
+The basic proof of concept has already been completed and shown to work in a limited capacity. The proof of concept is a simple command-line application that allows for 1:1 messaging between two parties. The proof of concept is written in Rust, and uses the _Dalek_ libraries for cryptographic primitives, as well as _ChaCha20-Poly1305_ for encryption.
 
 ## Phase 2: Multi-Device & Group Messaging
 
