@@ -28,7 +28,7 @@ bibliography: ./biblio.bib
 
 # Abstract
 
-Public blockchain ledgers are, at first glance, antithetical to privacy: all data are recorded permanently and publicly. While this is necessary, in many cases, to trustlessly verify the execution of the virtual machine, by the same token, blockchains are not often used to directly store sensitive information. However, popular blockchains do provide data distribution (data availability), historical execution auditability, and data accessibility that have interesting implications for encrypted messaging. The disadvantages for using a blockchain as the underlying middleman for an encrypted messaging system are clear and numerous&mdash;cost, privacy, efficiency, etc. We present a protocol that attempts to mitigate these issues while taking advantage of the unique mechanisms that blockchains do provide, and provide recommendations for similar projects.
+Public blockchain ledgers are, at first glance, antithetical to privacy: all data are recorded permanently and publicly. While this is necessary, in many cases, to trustlessly verify the execution of the virtual machine, by the same token, blockchains are not often used to directly store sensitive information. However, popular blockchains do provide data distribution (data availability), historical execution auditability, and data accessibility that have interesting implications for encrypted messaging. The disadvantages for using a blockchain as the underlying middleman for an encrypted messaging system are clear and numerous: cost, privacy, efficiency, etc. We present a protocol that attempts to mitigate these issues while taking advantage of the unique mechanisms that blockchains do provide, and provide recommendations for similar projects.
 
 # Definitions
 
@@ -72,31 +72,31 @@ A channel has a deterministic sequence hash generator. Hashing the fields of the
 
 The message repository is a simple construct, consisting only of a key-value store from which anyone can read, and to which anyone can write. The only restriction is that existing keys cannot be overwritten.
 
-Using a series of abstractions, the channel construct can be composed in a number of different ways, supporting bidirectional $1 \leftrightarrow 1$ messaging, $1 \leftrightarrow N$ messaging, and $N \leftrightarrow M$ messaging.
+Using a series of abstractions, the channel construct can be composed in a number of different ways, supporting $1 \leftrightarrow 1$, $1 \leftrightarrow N$, and $N \leftrightarrow N$ messaging.
 
-Of particular interest is $N \leftrightarrow M$ messaging. If all members of a particular group share the same secret, they can all generate the same sequence of hashes, and decrypt all of the messages in the channel. This allows for posting a single message, encrypted with the shared secret, to the public message repository, and all of the members of the group will be able to read it, regardless of the number of members in the group. Thus, we have $O(1)$ space complexity for broadcast transmissions.
+Of particular interest is $N \leftrightarrow N$ messaging. If all members of a particular group share the same secret, they can all generate the same sequence of hashes, and decrypt all of the messages in the channel. This allows for posting a single message, encrypted with the shared secret, to the public message repository, and all of the members of the group will be able to read it, regardless of the number of members in the group. Thus, we have $O(1)$ space complexity for broadcast transmissions.
 
 ## Channels
 
-Consider a unidirectional channel $c$, with sender $s$ and receiver $r$, where the public keys of $r$ and $s$ are mutually known. Using Diffie-Hellman, or any other method of establishing a shared secret, $s$ and $r$ can establish a shared secret $k$. In combination with other, optional, static metadata, a similarly secret channel identifier $i_{s \rightarrow r}$ can be derived. An example of this process is demonstrated below:
+Consider a channel with members Sender Steve and Receiver Robin $\mathcal{C}_{\{S,R\}}$, where the public keys $v_S$ and $v_R$ are mutually known. Using Diffie-Hellman or any other method of establishing a shared secret, Steve and Robin can establish a shared secret $k_{\{S,R\}} = \operatorname{Diffie-Hellman}(S, R)$. In combination with other, optional, static metadata, a similarly secret channel identifier $i_{\{S,R\}}$ can be derived. An example of this process is demonstrated below:
 
-$$ i_{s \rightarrow r} = H(k, s \concat r) $$
+$$ i_{\{S,R\}} = H(k_{\{S,R\}}, v_S \concat v_R) $$
 
-where $H$ is a keyed cryptographic hash function (such as HMAC-SHA3-512), $s$ is the public key of the sender, $r$ is the public key of the receiver, and $k$ is the shared secret.
+where $H$ is a keyed cryptographic hash function (such as HMAC-SHA3-512).
 
-The channel identifier $i_{s \rightarrow r}$ is used to identify the channel $c$. However, this identifier must remain secret, as it can be used to derive the sequence hashes for the channel before they have been posted to a public message repository.
+The channel identifier $i_{\{S,R\}}$ is used to identify the channel $\mathcal{C}_{\{S,R\}}$. However, this identifier should not be publicized because it can be used to derive the sequence hashes for the channel before they have been posted to a public message repository. Additions to the protocol (TODO: ref "ensuring proxy honesty") relieve the need to keep individual sequence hashes secret, however, revealing a channel identifier would make it possible to generate all sequence hashes for a channel, proving that they are linked.
 
 ## Generating sequence hashes
 
-Once a channel has been established, the sender and receiver can generate a sequence hash $h_{s \rightarrow r}^n$ for the $n$th message in the channel. This sequence hash is used to identify the message in the message repository. The sequence hash is generated as follows:
+Once a channel has been established, the sender and receiver can generate a sequence hash $h_{\{S,R\}}^n$ for the $n$th message in the channel. This sequence hash is used to identify the message in the message repository. The sequence hash is generated as follows:
 
-$$ h_{s \rightarrow r}^n = H(i_{s \rightarrow r}, n) $$
+$$ h_{\{S,R\}}^n = H(i_{\{S,R\}}, n) $$
 
 where $n$ is the sequence number of the message.
 
 ## Posting and reading messages
 
-Once a sequence hash has been generated, the sender can post a payload $(h_{s \rightarrow r}^n, c)$ to the message repository, where $c$ is the ciphertext of the message, encrypted with the shared secret $k$. Once the message has posted, the receiver, knowing the shared secret $k$ and the index of last message he saw $n-1$, can find the message keyed by $h_{s \rightarrow r}^n$ in the message repository, and decrypt it.
+Once a sequence hash has been generated, the sender can post a payload $(h_{\{S,R\}}^n, c)$ to the message repository, where $c$ is the ciphertext of the message, encrypted with the shared secret $k_{\{S,R\}}$. Once the message has posted, the receiver Robin, knowing the shared secret $k_{\{S,R\}}$ and the index of last message he saw $n-1$, can find the message keyed by $h_{\{S,R\}}^n$ in the message repository, and decrypt it.
 
 ## Group abstractions
 
