@@ -158,7 +158,7 @@ Therefore, it becomes necessary to enforce some sort of safeguard that prevents 
 
 Now we introduce another criterion: a proof that the value to be stored under a key actually *belongs* in that storage slot. Since the message repository does not necessarily impose authentication measures, each proof must be self-contained. This use-case dictates that the proof must show that some property of the payload links it to the preimage of the sequence hash. Recall that the sequence hash is composed of, among other things, the shared secret among channel members. At first glance, including some sort of digital signature seems to accomplish a great deal of our goal, but closer inspection reveals that a digital signature must be verified against a known public key, the use of which would compromise the identities of participants and/or link multiple messages from the same channel together, eliminating many of the protocol's desirable qualities.
 
-Therefore, instead of relying on traditional signature verification, we turn to a new player on the modern cryptographic stage: zero-knowledge proofs (ZKPs). A ZKP proves to a verifier that a prover is in possession of some knowledge without revealing to the verifier anything about that knowledge.
+Therefore, instead of relying on traditional signature verification, we turn to a new player on the modern cryptographic stage: zero-knowledge proofs (ZKPs). A ZKP proves to a verifier that a prover is in possession of some knowledge without revealing to the verifier anything about that knowledge. [@goldwasser_knowledge_1985]
 
 There are many different systems that can be used to generate zero-knowledge proofs, but the specifics of choosing a proof system is well beyond the scope of this paper. Rather than overconstrain this protocol description with a specific implementation, we recommend optimizing for proof verification efficiency when choosing a system, since the use-case involves verifying many small proofs.
 
@@ -180,7 +180,7 @@ def verify(
 
 Sender Steve will be responsible for generating a proof by constructing a set of public and private inputs which satisfy the circuit. In the case of the circuit pseudocode in the listing above, Steve would be responsible for providing public inputs of the sequence hash $h_{\{S,R\}}^n$ and ciphertext $c^n$, as well as the private inputs of the shared secret $k_{\{S,R\}}$, the rest of the information required to compute the sequence hash (such as the message index $n$), and the cleartext of the message. Since these latter items are part of the private inputs, they will not be revealed in the proof that is generated.
 
-Upon constructing this proof, Sender Steve packages the three items&mdash;sequence hash, ciphertext, and proof&mdash;all together and sends them off to the message distributor (either directly to the message repository, or to the proxy if that service is in effect).
+Upon constructing this proof, Sender Steve packages the three items&mdash;sequence hash, ciphertext, and proof; $(h_{\{S,R\}}^n, c^n, p^n)$&mdash;all together and sends them off to the message distributor (either directly to the message repository, or to the proxy if that service is in effect).
 
 When the message repository receives this triplet, it first verifies the proof with the well-known circuit and the provided sequence hash and ciphertext. If the proof can be successfully verified, only then does the message repository write the ciphertext into its key-value store.
 
@@ -198,9 +198,21 @@ Introducing this feature to our protocol requires the increase from a single pro
 
 This feature is not without its downsides: not only does it add nontrivial amounts of complexity to the development and maintenance of the protocol&mdash;properly implementing the Dandelion-style routing is a significant up-front cost, and maintaining a large, decentralized network of routing proxies is a significant maintenance cost&mdash;it also adds a noticeable amount of latency to the message sending process. From a privacy perspective, this is not entirely bad, since high and highly-variable latency between dispatch and receipt by the message repository can reduce the correlations in network activity timings, but it has an exclusively negative impact on the user-friendliness of the protocol.
 
-Even assuming an honest network of relays, timing attacks are a further deanonymization technique. [@defconconference_def_2013] Because each member of the proxy network should be publicly accessible, this allows for sidechannel deanonymization attacks: though the technique presented by Evans and Grothoff relies on a malicious JavaScript injection to "phone home," simple observation of the message repository over a long enough period could serve the same purpose of latency measurement.
+Even assuming an honest network of relays, timing attacks are a further deanonymization technique. [@defconconference_def_2013] Because each member of the proxy network should be publicly accessible, this allows for sidechannel deanonymization attacks: though the technique presented by Evans and Grothoff relies on a malicious JavaScript injection to "phone home," simple observation of the message sender along with the message repository over a long enough period could serve the same purpose of latency measurement.
 
 ## Message notifications
+
+The life of a message receiver is rather drab and repetitive. Receiver Robin has a simple responsibility: check the message repository to see if the next sequence hash exists. It does exist? Great, download the message! It does not exist? Go back and check again, repeating until it shows up.
+
+Unfortunately, upon closer examination, some issues become apparent. In the same vein as the previous section, wherein we addressed the potential for network activity analysis to deanonymize message senders, similar analysis can serve to deanonymize receivers. However, it is arguably slightly more risky for the receivers, because they check for the same sequence hash multiple times, meaning that a network observer need only be observing the network for long enough to witness a single request. (Note that in the case of a blockchain environment, an RPC node operator could easily be this "network activity observer," for whom observation is significantly easier to perform than a traditional man-in-the-middle sniff.) The knowledge that a user searching for a particular (as of yet undelivered) message is likely to inquire about the sequence hash multiple times again in the future enables attackers to execute more targeted deanonymization attempts.
+
+Such malicious observations would also reveal unused-yet-valid sequence hashes to attackers. If the zero-knowledge proof extension is not implemented, then this system requires assuming the trustworthiness of the message repository and all handlers of unencrypted (that is, by a TLS tunnel or similar) payload data between the message repository and the message receiver to not "snipe" the valid sequence hash and insert it with a malicious or garbage payload before the real message has a chance to land.
+
+Furthermore, it is unlikely that a single receiver will only be interested in checking for the existence of a single message. Rather, a single user of the protocol is probably going to be listening for the existence of a multitude of different messages. This would impose a serious bandwidth requirement on even light users of the protocol. The reference implementation of this protocol uses a few types of control messages (messages containing instructions to the application, rather than directly human-readable plain text) which might be transmitted across designated channels. This practice in combination with a user who is only communicating with a few different users and/or groups already imposes a heavy burden of network usage on the user if they wish for their communications to be even remotely close to real-time.
+
+Option 1: Routing requests through the dandelion proxy network.
+
+Option 2: Sequence hash Bloom filters.
 
 ## Message receiving
 
