@@ -6,6 +6,7 @@ author:
   - Hidehiko Masuhara <masuhara@prg.is.titech.ac.jp>
 papersize: a4
 header-includes: |
+  \usepackage{siunitx}
   \newcommand{\concat}{\mathbin{\|}}
 bibliography: ./biblio.bib
 ---
@@ -32,8 +33,6 @@ Public blockchain ledgers are, at first glance, antithetical to privacy: all dat
 
 # Definitions
 
-## Metadata
-
 The goal of this paper is to build upon the work of previous protocols to hide even more metadata about conversations. In particular, we will hide the following information, in addition to hiding of the payload itself:
 
 - Sender's identity.
@@ -44,23 +43,33 @@ The goal of this paper is to build upon the work of previous protocols to hide e
 - Timestamp of receipt.
 - Payload size.
 - Conversation history.
-- Forward secrecy.
 
-However, privacy of these data is not sufficient to make a usable protocol. Therefore, we will also ensure the following properties that make the protocol usable:
+However, privacy of these data is not sufficient to make a usable protocol. Therefore, we will also aim to fulfill the following properties that make the protocol usable:
 
 - Users can easily use the service across multiple devices, including message synchronization.
 - Group messaging is efficient and scalable.
 - The service is inexpensive to run as a server and as a user/client.
 
-## Conversation history
+# Prior art
+
+## BitMessage
+
+BitMessage [@warren_bitmessage_2012] is a Bitcoin-inspired message transfer protocol. We highlight some notable differences in the functionality of the BitMessage protocol and our proposal.
+
+1. Sending a message over the BitMessage network requires a proof-of-work, guaranteeing a latency floor in the protocol. Our protocol only requires such proofs as the underlying infrastructure, with [an optional extension for zero-knowledge proofs](#ensuring-proxy-honesty).
+2. All users connected to the BitMessage network receive all messages. Users of our protocol know beforehand which messages are intended for them and can retrieve only those in a privacy-preserving fashion. There is [an optional extension for message notifications](#message-notifications) that incurs an $O(n)$ space cost on users where $n$ is the number of messages sent to the message repository.
+3. Broadcast messages may be sent on the BitMessage network, but they are visible to all users of the network who wish to view them. Our protocol supports arbitrarily large broadcast groups with $O(1)$ sending cost, simply by sharing a new channel key.
+4. Messages on the BitMessage network are deleted after a period of two days. Our protocol uses an indelible append-only ledger (i.e. blockchain) from which messages cannot be erased.
+
+## Signal Double-Ratchet
+
+Considered by many to be the gold standard in modern encrypted messaging, the Signal Double-Ratchet protocol [@perrin_double_2016] implements a foreboding trifecta of privacy properties: resilience, forward security, and break-in security. The sequence hashes from our protocol exhibit the first of these properties.
 
 One of the issues experienced by many protocols in this sector is that while the messaging protocol may be clearly cryptographically and mathematically sound, correctly implementing such fancy techniques as deniability, if transcripts of the conversation are revealed, those hard mathematical evidences do very little to effectively recuse a conversant from a conversation. This has led some protocols to discount such techniques entirely. [@jefferys_session_2020] [@soatok_dont_2025]
 
 The experimental techniques presented in this paper do not endeavor to implement complete deniability in the traditional sense, due in large part to the nature of the invariants required by the infrastructure upon which they depend. That is to say, it would violate the fundamental contract of an "append-only public ledger" if two plausible transcripts could be provided that purport a different sequences of appends.
 
-Rather, we take a different approach. One of the problems with simply implementing something like the Signal Double-Ratchet algorithm [@perrin_double_2016] is that while it hides the _content_ of the messages between conversants Alice and Bob, it does not hide the fact that Alice and Bob are 1) conversing, or 2) conversing with each other. The flexible channels protocol in itself does attempt to conceal this information. However, it should be duly noted that the protocol as presented assumes the existence of some sort of public-key infrastructure (PKI). PKIs are usually publicly-accessible, so the presence of a user's public key in the PKI could belie their usage of the protocol. This issue can be mitigated somewhat by 1) using a PKI that has sufficient quantity of users for a diverse variety of applications, or 2) not using a public PKI, and instead manually facilitating public key exchanges (e.g. by meeting in person, scanning QR codes, etc.).
-
-# Prior art
+Rather, we take a different approach. One of the problems with simply implementing something like the Signal Double-Ratchet algorithm is that while it hides the _content_ of the messages between conversants Alice and Bob, it does not hide the fact that Alice and Bob are 1) conversing, or 2) conversing with each other. The flexible channels protocol in itself does attempt to conceal this information. However, it should be duly noted that the protocol as presented assumes the existence of some sort of public-key infrastructure (PKI). PKIs are usually publicly-accessible, so the presence of a user's public key in the PKI could belie their usage of the protocol. This issue can be mitigated somewhat by 1) using a PKI that has sufficient quantity of users for a diverse variety of applications, or 2) not using a public PKI, and instead manually facilitating public key exchanges (e.g. by meeting in person, scanning QR codes, etc.).
 
 # Protocol
 
@@ -70,7 +79,7 @@ A channel is a total-ordered stream of messages. It consists of membership list 
 
 A channel has a deterministic sequence hash generator. Hashing the fields of the channel, together with a nonce, produces a "sequence hash." This sequence hash can only be recreated by parties privy to the channel's shared secret, yet it does not reveal the shared secret. The sequence hash serves as the identifying key of a message sent to the message repository.
 
-The message repository is a simple construct, consisting only of a key-value store from which anyone can read, and to which anyone can write. The only restriction is that existing keys cannot be overwritten.
+The message repository is a simple construct, consisting of a key-value store from which anyone can read, and to which anyone can write. The only restriction is that existing keys cannot be overwritten. The public nature of the message repository is critical to ensuring the efficiency of group messaging as well as ensuring that a user accessing the system from multiple different terminals is easily able to retrieve previous messages.
 
 Using a series of abstractions, the channel construct can be composed in a number of different ways, supporting $1 \leftrightarrow 1$, $1 \leftrightarrow N$, and $N \leftrightarrow N$ messaging.
 
@@ -124,13 +133,15 @@ One of the most obvious pieces of metadata in an encrypted message is its size. 
 
 The trivial solution to this is to enforce a regular payload size to which all messages must conform. This approaches a good solution to this problem, but it also introduces a number of drawbacks.
 
-First, and most obviously, is that if the messages in question are much smaller than the standard size, it will result in a lot of wasted space on the message repository. If the message repository in question is a blockchain (a natural choice in many respects for this protocol), storage is quite expensive (TODO: cite), even orders of magnitude beyond a commercial cloud provder like Amazon S3.
+First, and most obviously, is that if the messages in question are much smaller than the standard size, it will result in a lot of wasted space on the message repository. If the message repository in question is a blockchain (a natural choice in many respects for this protocol), storage is quite expensive&mdash;many, many orders of magnitude beyond a commercial cloud provder like Amazon S3.[^expensive_storage]
+
+[^expensive_storage]: For instance, the Ethereum smart contract platform  charges 20,000 units of gas for a cold 256-bit storage write. [@wood_ethereum_2025, Appendix G] At current gas prices of about 30 GWei (3E-8 Ether) [@etherscanio_gastracker] and an Ether price of about \$3,400 [@coingecko_ethereum_2025], we calculate an approximate price of $3400 \si{\,USD\per Ether} \cdot 3.1 \times 10^{-8} \si{\,Ether\per gas} \cdot 20000 \si{\,gas\per slot} \cdot \frac{10^9 \si{\,bytes\per GB}}{32 \si{\,bytes\per slot}} = 6.6 \times 10^8 \si{\,USD\per GB}$, over $600 million per gigabyte.
 
 A converse problem of a regulated message size is for messages where the contents are longer than the regular size. Not only does this impose an overhead in the necessity of breaking up large messages to fit into the regular size, but the metadata that must be included in order for the receiver to properly parse the incoming messages may be cumbersome (or large).
 
 However, even worse than the inefficiency problem are the potential privacy implications. Let us say, for example, that the regulated message size were 1 kibibyte (1024 bytes), but the user wished to send a 10-kibibyte message? Of course, the user must send at least 10 standard-sized messages to transfer the data outright. Unfortunately, if the user wishes to do this with any degree of efficiency, he must send those messages all in quick succession, even simultaneously. From the perspective of a party observing the user's network traffic, 10 simultaneous 1-kibibyte messages is not really much better than simply sending a single 10-kibibyte message.
 
-Therefore, we expand this idea by introducing a range of regulated message sizes, e.g. 1-kb, 4-kb, 16-kb, 64-kb, to which each message must conform. It the responsibility of the client to choose the most effective set of message sizes to use when sending a particular message. The client could choose to send a 3-kb message in 3 1-kb messages, or in a single 4-kb message, or in two 64-kb messages, depending on how the client implements a size-selection algorithm: optimizing for efficiency or masking?
+Therefore, we expand this idea by introducing a range of regulated message sizes, e.g. 1-kb, 4-kb, 16-kb, 64-kb, to which each message must conform. It the responsibility of the client to choose the most effective set of message sizes to use when sending a particular message. The client could choose to send a 3-kb message in three 1-kb messages, or in a single 4-kb message, or in two 64-kb messages, depending on how the client implements a size-selection algorithm: optimizing for efficiency or masking?
 
 Some kinds of messages may simply be too large to make practical use of a protocol with standardized message lengths, such as photographs and HD video. In this case, we recommend providing the actual contents over a separate medium (e.g. a centralized hosting provider), and simply transmitting the URI for the contents over the channel.
 
@@ -214,31 +225,56 @@ Furthermore, it is unlikely that a single receiver will only be interested in ch
 
 Therefore, while using the dandelion-style proxy network for checking for individual sequence hash notifications is certainly an improvement over direct requesting, there is a fundamental disconnect in the approach: Robin wishes the message repository to tell him whether specific sequence hashes exist without identifying those hashes.
 
-To solve this conundrum, we introduce a sequence hash Bloom filter. [@bloom_space_1970] Upon writing a message to its storage, the message repository also inserts[^not-necessarily-immediately] the sequence hash into a Bloom filter. In order to maintain an acceptable false-positive rate, the current "message notification filter" is archived at regular intervals. Archived and current filters can be requested by users. This structure allows a message receiver awaiting the delivery of one or more sequence hashes to download a single payload within which he can check for the presence of any number of sequence hashes. If the user has not synchronized with the network recently, he can download archived filters to the same effect.
+### Message notification filters
 
-[^not-necessarily-immediately]: It is not necessary that the Bloom filter is constructed immediately. It could, for example, be constructed on-demand if the cost of storage on the message repository is higher than that of compute.
+To solve this conundrum, we introduce a sequence hash Bloom filter. [@bloom_space_1970] Upon writing a message to its storage, the message repository also inserts[^not_necessarily_immediately] the sequence hash into a Bloom filter. In order to maintain an acceptable false-positive rate, the current "message notification filter" is archived at regular intervals. Archived and current filters can be requested by users. This structure allows a message receiver awaiting the delivery of one or more sequence hashes to download a single payload within which he can check for the presence of any number of sequence hashes. If the user has not synchronized with the network recently, he can download archived filters to the same effect.
+
+[^not_necessarily_immediately]: It is not necessary that the Bloom filter is constructed immediately. It could, for example, be constructed on-demand if the cost of storage on the message repository is higher than that of compute.
 
 In the case that the message repository generates the message notification filters on-demand, the message repository should *not* allow clients to specify a custom timeframe of sequence hashes to include, due to potential metadata leakage pertaining to when the client in question last synchronized with the network.
 
-While this approach succeeds in concealing the sequence hashes that a message receiver is intent on receiving, it does little to reduce network load or improve latency.
+While this approach succeeds in concealing the sequence hashes for which a message receiver is intent on listening, it increases network load and worsens latency. Whereas a simple, direct query to the message repository would be nearly negligible in terms of network load&mdash;a request object containing merely a sequence hash and response merely a boolean&mdash;the size of a Bloom filter scales linearly with the maximum number of insertions given a false-positive rate, where the maximum number of insertions is the maximum number of messages that the message repository can process before archiving the current message notification filter. Where $p$ is the desired false-positive rate, the number of bits required per element $b$ is given by:
 
-## Message receiving
+$$ b = \frac { \ln \left( \frac{1}{p} \right) }
+  {\ln ^2 \left( 2 \right) } $$ [@cortesi_3_2010]
 
-# Development
+Meaning that a modest 1% false-positive rate commands about 9.6 bits per sequence hash.
 
-A reference implementation for this paper is currently in development. The following is a proposal for the development of the protocol.
+The apples-to-apples comparison with authenticated (albeit end-to-end encrypted) server messaging platforms is quite bleak, as they have no such scaling limitation. However, compared with other public ledger/private activity-style platforms which may require downloading and scanning the entirety of the ledger [@monerohow_low_level_2024], the expense of ~10 bits per sequence hash is comparatively low.
 
-## Phase 1: Proof of Concept
+### Garbage message requests
 
-The basic proof of concept has already been completed and shown to work in a limited capacity. The proof of concept is a simple command-line application that allows for 1:1 messaging between two parties. The proof of concept is written in Rust, and uses the _Dalek_ libraries for cryptographic primitives, as well as _ChaCha20-Poly1305_ for encryption.
+While the Bloom filter approach does have the advantage of providing a quasi-offline means of checking whether a particular set of sequence hashes are reasonably likely to have been posted to the message repository, the inextractibility of elements contained within the Bloom filter actually prevent a mirror strategy to the ["garbage messages"](#garbage-messages) suggested previously.
 
-## Phase 2: Multi-Device & Group Messaging
+If Receiver Robin is concerned that requesting a certain extant sequence hash may link his identity to that of Sender Steve, Robin might consider sending bogus requests for other extant sequence hashes to conceal the genuine request amongst false ones. However, if the primary means by which Robin learns about the state of sequence hashes in the message repository is via the message notification filter, there is not a reasonable way for Robin to be able to know other extant sequence hashes without constructing them himself (implying knowledge of the secrets necessary to calculate them) or plainly asking for them (implicitly confessing a lack of knowledge of the secrets necessary to calculate them).
 
-The next phase of development will focus on multi-device messaging and group messaging. This will be implemented in the proof of concept, and will be written in Rust.
+When sending messages, a user also sends out some garbage messages as noise. Assuming a network Observer Ollie who is attempting to deanonymize users based on inter-participant network and message repository activity, Ollie can observe certain messages that never get read. Ollie, having knowledge of the protocol, realizes that these messages are likely to be garbage messages, and therefore excludes them from his network analysis after some time.
 
-## Phase 3: Library
+Therefore, we make the following recommendation.
 
-The final phase of development will be to create a library that can be used by other applications. This will be written in Rust, and will be published to crates.io.
+When this user sends out some garbage messages, the user retains the sequence hashes[^retain_sequence_hashes], additionally sending out garbage message *requests* later on to imitate a receiver coming on-line and detecting the delivery of an expected sequence hash. It should be noted that the delay between sending and "receiving" a garbage message should be highly variable, with some garbage messages not getting "received" at all.
+
+[^retain_sequence_hashes]: Or simply the minimum information necessary to reproduce them.
+
+# Implementation
+
+[A reference implementation for this paper is available.](https://github.com/encody/near-private-data)
+
+The proof-of-concept is a simple command-line application that allows for 1:1 messaging between two parties. The proof of concept is written in Rust, and uses the [_Dalek_ libraries](https://github.com/dalek-cryptography) for cryptographic primitives, as well as [_ChaCha20-Poly1305_](https://github.com/RustCrypto/AEADs/tree/master/chacha20poly1305) for encryption.
+
+Even without enabling many of the privacy-enhancing features, the simple application struggles to approach real-time communications, with regular latencies of 1-3 seconds.
+
+# Conclusion
+
+We present flexible channels, an experimental foray into encrypted messaging over public, append-only message repositories such as blockchains. The key insights of this research are the channel and sequence hash constructions which allow for privacy-friendly messaging across public message repositories using simple, traditional cryptography.
+
+We explore a number of benefits of this infrastructure, including easy cross-device message synchronization, uncensorability, and $O(1)$ broadcast messaging.
+
+However, the protocol as described and implemented immediately suffers severe performance impairments that preclude its adoption. Regardless of its performance, the infrastructure does not provide significant improvements over existing practices of end-to-end encryption through authenticated servers, and the privacy implications of permanently etching ostensibly secret messaging history onto an inextirpable public record encrypted merely by means which are considered secure by the standards of today cannot be understated. The protocol as described does not enforce any sort of forward secrecy, although it is flexible enough to allow e.g. key rotation within channels, so the design does not preclude the implementation of this privacy-critical feature.
+
+Therefore, while we cannot yet recommend using this protocol in non-experimental contexts, we are pleased to submit this novel combination of techniques for critique and edification.
+
+Possible future applications of similar technology could become feasible in environments with a forcing need for public auditability juxtaposed with privacy (e.g. government operations or highly-regulated industries).
 
 \newpage
 
