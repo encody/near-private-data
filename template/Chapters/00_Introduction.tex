@@ -1,0 +1,37 @@
+\chapter{Introduction}
+
+\label{Introduction}
+
+\section{Definitions}\label{definitions}
+
+The goal of this paper is to build upon the work of previous protocols to hide even more metadata about conversations. In particular, we will hide the following information, in addition to hiding of the payload itself:
+
+\begin{itemize}
+\item
+  Sender's identity.
+\item
+  Sender's location (geographical and network).
+\item
+  Timestamp of transmission.
+\item
+  Receiver's identity.
+\item
+  Receiver's location (geographical and network).
+\item
+  Timestamp of receipt.
+\item
+  Payload size.
+\item
+  Conversation history.
+\end{itemize}
+
+However, privacy of these data is not sufficient to make a usable protocol. Therefore, we will also aim to fulfill the following properties that make the protocol usable:
+
+\begin{itemize}
+\item
+  Users can easily use the service across multiple devices, including message synchronization.
+\item
+  Group messaging is efficient and scalable.
+\item
+  The service is inexpensive to run as a server and as a user/client.
+\end{itemize}

@@ -1,0 +1,27 @@
+\chapter{Prior Art}
+
+\label{PriorArt}
+
+\section{BitMessage}\label{bitmessage}
+
+BitMessage \parencite{warren_bitmessage_2012} is a Bitcoin-inspired message transfer protocol. We highlight some notable differences in the functionality of the BitMessage protocol and our proposal.
+
+\begin{enumerate}
+\item Sending a message over the BitMessage network requires a proof-of-work, guaranteeing a latency floor in the protocol. Our protocol only requires such proofs as the underlying infrastructure, with \hyperref[ensuring-proxy-honesty]{an optional extension for zero-knowledge proofs}.
+\item All users connected to the BitMessage network receive all messages. Users of our protocol know beforehand which messages are intended for them and can retrieve only those in a privacy-preserving fashion. There is \hyperref[message-notifications]{an optional extension for message notifications} that incurs an \(O(n)\) space cost on users where \(n\) is the number of messages sent to the message repository.
+\item Broadcast messages may be sent on the BitMessage network, but they are visible to all users of the network who wish to view them. Our protocol supports arbitrarily large broadcast groups with \(O(1)\) sending cost, simply by sharing a new channel key.
+\item Messages on the BitMessage network are deleted after a period of two days. Our protocol uses an indelible append-only ledger (i.e.~blockchain) from which messages cannot be erased.
+\end{enumerate}
+
+%-----------------------------------
+%	SUBSECTION 1
+%-----------------------------------
+\section{Signal Double-Ratchet}\label{signal-double-ratchet}
+
+Considered by many to be the gold standard in modern encrypted messaging, the Signal Double-Ratchet protocol \parencite{perrin_double_2016} implements a foreboding trifecta of privacy properties: resilience, forward security, and break-in security. The sequence hashes from our protocol exhibit the first of these properties.
+
+One of the issues experienced by many protocols in this sector is that while the messaging protocol may be clearly cryptographically and mathematically sound, correctly implementing such fancy techniques as deniability, if transcripts of the conversation are revealed, those hard mathematical evidences do very little to effectively recuse a conversant from a conversation. This has led some protocols to discount such techniques entirely. \parencite{jefferys_session_2020, soatok_dont_2025}
+
+The experimental techniques presented in this paper do not endeavor to implement complete deniability in the traditional sense, due in large part to the nature of the invariants required by the infrastructure upon which they depend. That is to say, it would violate the fundamental contract of an ``append-only public ledger'' if two plausible transcripts could be provided that purport a different sequences of appends.
+
+Rather, we take a different approach. One of the problems with simply implementing something like the Signal Double-Ratchet algorithm is that while it hides the \emph{content} of the messages between conversants Alice and Bob, it does not hide the fact that Alice and Bob are (1) conversing, or (2) conversing with each other. The flexible channels protocol in itself does attempt to conceal this information. However, it should be duly noted that the protocol as presented assumes the existence of some sort of public-key infrastructure (PKI). PKIs are usually publicly-accessible, so the presence of a user's public key in the PKI could belie their usage of the protocol. This issue can be mitigated somewhat by (1) using a PKI that has sufficient quantity of users for a diverse variety of applications, or (2) not using a public PKI, and instead manually facilitating public key exchanges (e.g. by meeting in person, scanning QR codes, etc.).

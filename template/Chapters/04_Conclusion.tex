@@ -1,0 +1,11 @@
+\chapter{Conclusion}\label{Conclusion}
+
+We present Flexible Channels, an experimental foray into encrypted messaging over public, append-only message repositories such as blockchains. The key insights of this research are the channel and sequence hash constructions which allow for privacy-friendly messaging across public message repositories using simple, traditional cryptography.
+
+We explore a number of benefits of this infrastructure, including easy cross-device message synchronization, uncensorability, and $O(1)$ broadcast messaging.
+
+However, the protocol as described and implemented immediately suffers severe performance impairments that preclude its adoption. Regardless of its performance, the infrastructure does not provide significant improvements over existing practices of end-to-end encryption through authenticated servers, and the privacy implications of permanently etching ostensibly secret messaging history onto an inextirpable public record encrypted merely by means which are considered secure by the standards of today cannot be understated. The protocol as described does not enforce any sort of forward secrecy, although it is flexible enough to allow e.g. key rotation within channels, so the design does not preclude the implementation of this privacy-critical feature.
+
+Therefore, while we cannot yet recommend using this protocol in non-experimental contexts, we are pleased to submit this novel combination of techniques for critique and edification.
+
+Possible future applications of similar technology could become feasible in environments with a forcing need for public auditability juxtaposed with privacy (e.g. government operations or highly-regulated industries).
