@@ -7,25 +7,10 @@ author:
 papersize: a4
 header-includes: |
   \usepackage{siunitx}
+  \usepackage{tikz}
   \newcommand{\concat}{\mathbin{\|}}
 bibliography: ./biblio.bib
 ---
-
-<!-- ## Comparison with other protocols
-
-| Protocol         | Comparison                   |
-| ---------------- | ---------------------------- |
-| Matrix (Element) |                              |
-| Signal           | Leaks transcript affiliation |
-| Session          |                              |
-| Mailchain        |                              |
-| Telegram         |                              |
-| Bitmessage       | Expensive multicast          |
-| Molasses         |                              |
-| Briar            |                              |
-| Ricochet         |                              |
-| Tox              |                              |
-| Threema          |                              | -->
 
 # Abstract
 
@@ -127,6 +112,45 @@ We have established that a user *can* send garbage messages, but *when* should t
 
 Requiring a client to be continuously online is a perfectly fine stipulation for a protocol to make, but in the case of this protocol, it well-nigh defeats the purpose of having a message repository in the first place. We will return to this point again [when we discuss proxies](#proxies).
 
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[
+        message/.style={circle,draw,fill=white,minimum size=6mm},
+        garbage/.style={circle,draw,fill=gray!30,minimum size=6mm},
+        description/.style={align=left}
+    ]
+
+    \draw[->] (0,0) -- (10,0) node[right] {Time};
+
+    \node[message] at (1,0) {};
+    \node[garbage] at (2,0) {};
+    \node[message] at (2.5,0) {};
+    \node[garbage] at (4,0) {};
+    \node[garbage] at (4.5,0) {};
+    \node[garbage] at (5.8,0) {};
+    \node[message] at (6,0) {};
+    \node[garbage] at (7,0) {};
+    \node[garbage] at (7.8,0) {};
+    \node[message] at (8.5,0) {};
+    \node[message] at (9,0) {};
+
+    \node[description] at (5,1.5) {
+        \begin{tabular}{l l}
+            \raisebox{-1ex}{\tikz\node[message] {};} & Real messages \\[0.5ex]
+            \raisebox{-1ex}{\tikz\node[garbage] {};} & Garbage messages
+        \end{tabular}
+    };
+
+    \node[description] at (5,-1.5) {
+        An observer cannot distinguish between real and garbage\\
+        messages without knowledge of channel secrets.
+    };
+
+    \end{tikzpicture}
+    \caption{Real and garbage messages as seen by outside observers.}
+    \label{fig:garbage_messages}
+\end{figure}
+
 ## Payload size
 
 One of the most obvious pieces of metadata in an encrypted message is its size. A malicious actor observing network traffic over a long period of time may detect patterns in payload size which could allow the malicious actor to trace users across time.
@@ -137,9 +161,57 @@ First, and most obviously, is that if the messages in question are much smaller 
 
 [^expensive_storage]: For instance, the Ethereum smart contract platform  charges 20,000 units of gas for a cold 256-bit storage write. [@wood_ethereum_2025, Appendix G] At current gas prices of about 30 GWei (3E-8 Ether) [@etherscanio_gastracker] and an Ether price of about \$3,400 [@coingecko_ethereum_2025], we calculate an approximate price of $3400 \si{\,USD\per Ether} \cdot 3.1 \times 10^{-8} \si{\,Ether\per gas} \cdot 20000 \si{\,gas\per slot} \cdot \frac{10^9 \si{\,bytes\per GB}}{32 \si{\,bytes\per slot}} = 6.6 \times 10^8 \si{\,USD\per GB}$, over $600 million per gigabyte.
 
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[
+        payload/.style={draw,dotted,fill=white,minimum width=9.5mm,minimum height=9.5mm},
+        envelope/.style={draw,very thick,fill=gray!30,minimum width=40mm,minimum height=10mm}
+    ]
+
+    \node[envelope] (envelope) at (0,0) {};
+    \node[payload] (payload) at (-1.5,0) {};
+
+    \draw[|-|] (-2,0.75) -- (2,0.75) node[midway,above] {Regulated size};
+    \draw[|-|] (-2,-0.75) -- (-1,-0.75) node[midway,below] {Payload};
+
+    \end{tikzpicture}
+    \caption{A smaller payload fits into a larger regulated-size envelope with padding.}
+    \label{fig:payload_size}
+\end{figure}
+
 A converse problem of a regulated message size is for messages where the contents are longer than the regular size. Not only does this impose an overhead in the necessity of breaking up large messages to fit into the regular size, but the metadata that must be included in order for the receiver to properly parse the incoming messages may be cumbersome (or large).
 
 However, even worse than the inefficiency problem are the potential privacy implications. Let us say, for example, that the regulated message size were 1 kibibyte (1024 bytes), but the user wished to send a 10-kibibyte message? Of course, the user must send at least 10 standard-sized messages to transfer the data outright. Unfortunately, if the user wishes to do this with any degree of efficiency, he must send those messages all in quick succession, even simultaneously. From the perspective of a party observing the user's network traffic, 10 simultaneous 1-kibibyte messages is not really much better than simply sending a single 10-kibibyte message.
+
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[
+        payload/.style={draw,fill=white,minimum width=90mm,minimum height=10mm},
+        fullchunk/.style={draw,dotted,fill=white,minimum width=39.5mm,minimum height=9.5mm},
+        chunk/.style={draw,dotted,fill=white,minimum width=9.5mm,minimum height=9.5mm},
+        envelope/.style={draw,very thick,fill=gray!30,minimum width=40mm,minimum height=10mm}
+    ]
+
+    \node[payload] (payload) at (0,2) {Large payload};
+
+    \draw[->] (-2,1.5) -- (-4,0.75);
+    \draw[->] (0,1.5) -- (0,0.75);
+    \draw[->] (2,1.5) -- (4,0.75);
+
+    \node[envelope] (envelope1) at (-4.5,0) {};
+    \node[fullchunk] (chunk1) at (-4.5,0) {Filled envelope};
+
+    \node[envelope] (envelope2) at (0,0) {};
+    \node[fullchunk] (chunk2) at (-0,0) {Filled envelope};
+
+    \node[envelope] (envelope3) at (4.5,0) {};
+    \node[chunk] (chunk3) at (3,0) {};
+    \node[centered] at (4.5,0) {Underfilled envelope};
+
+    \end{tikzpicture}
+    \caption{A large payload split into multiple chunks, padded to fit regulated-size envelopes if necessary.}
+    \label{fig:payload_chunks}
+\end{figure}
 
 Therefore, we expand this idea by introducing a range of regulated message sizes, e.g. 1-kb, 4-kb, 16-kb, 64-kb, to which each message must conform. It the responsibility of the client to choose the most effective set of message sizes to use when sending a particular message. The client could choose to send a 3-kb message in three 1-kb messages, or in a single 4-kb message, or in two 64-kb messages, depending on how the client implements a size-selection algorithm: optimizing for efficiency or masking?
 
@@ -200,6 +272,35 @@ If a malicious third-party, Malicious Max, intercepted the triple and attempted 
 ## Dandelion-style routing
 
 Let us suppose there is an Observer Ollie of the network, including the message repository, the proxies, and the message sender. Ollie is able to observe the activity between each of the network participants, but not able to see the internal memory or computational activities of any of them. Because the message repository is publicly readable by anyone, Ollie is able to monitor the message repository for new messages. Therefore, Ollie can detect when a message sent by Steve appears on the message repository, and can therefore learn the sequence hash of a message known to have been sent by Steve. Continuing to monitor the network activity of all participants could further reveal to Ollie the identity of the message receiver Robin. (However, if we assume impenetrably encrypted network communication tunnels, this step may require additional techniques beyond simple surveillance.)
+
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[
+        participant/.style={circle,draw,fill=white,minimum size=10mm},
+        description/.style={align=left}
+    ]
+
+    \node[participant] (steve) at (-4,0) {S};
+    \node[description] at (-4,-0.75) {Sender};
+
+    \node[participant] (repository) at (4,0) {R};
+    \node[description] at (4,-0.75) {Repository};
+
+    \node[participant] (ollie) at (0,2) {O};
+    \node[description] at (0,2.75) {Observer};
+
+    \draw[->] (steve) -- (repository)
+        node[midway,below] {Sends message};
+
+    \draw[->,dashed] (ollie) -- (steve)
+        node[midway,above,sloped] {Sees activity};
+    \draw[->,dashed] (ollie) -- (repository)
+        node[midway,above,sloped] {Sees delivery};
+
+    \end{tikzpicture}
+    \caption{Network observer monitoring message sender and repository.}
+    \label{fig:observer}
+\end{figure}
 
 Therefore, the protocol is in need of a feature to break (or at least obfuscate) the network activity link between a sender distributing a message payload and that message payload appearing on the message repository.
 
