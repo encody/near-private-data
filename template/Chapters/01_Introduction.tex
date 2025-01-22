@@ -1,0 +1,49 @@
+\chapter{Introduction}
+
+\label{Introduction}
+
+\section{Motivation}\label{motivation}
+
+The privacy of digital communications is a critical issue in the Internet age. The Snowden revelations \parencite{greenwald_nsa_2013} have shown that world powers are actively monitoring and collecting data on their citizens. This emphasizes the need for secure communication channels that are resistant to surveillance.
+
+Not a few years prior, Satoshi Nakamoto had published the Bitcoin whitepaper \parencite{nakamoto_bitcoin_2008}, which introduced the concept of a decentralized, trustless, and censorship-resistant currency. The potential of this technology rapidly expanded to include the trustless execution of general-purpose applications, notably in the form of smart contracts on the Ethereum blockchain \parencite{buterin_ethereum_2014}. While these platforms are widely regarded as censorship-resistant, public ledgers are eponymously antipodean to privacy in so far as their contents and execution are intrinsically revealed. Thus, an ``anti-surveillance'' public-ledger blockchain protocol is almost a contradiction in terms: decentralization, and consequently censorship-resistance, is achieved by ``surveillance'' of the network by the public.
+
+Although there have been a few forays into privacy-first public-ledger cryptocurrency platforms (\cite[CryptoNote:][]{saberhagen_cryptonote_2013}; \cite[Zerocash:][]{sasson_zerocash_2014}), they have not achieved level of adoption of Bitcoin and Ethereum. Additionally, projects like Monero (CryptoNote derivative implementation) and Zcash (the active successor to Zerocash) are not general-purpose virtual machines like Ethereum, targeting only the peer-to-peer medium-of-exchange use case.
+
+Mina Protocol \parencite{bonneau_mina_2020} implements a general-purpose virtual machine by using recursive zk-SNARKs to compress the blockchain to a constant size proof-of-execution; the state root is included in the proof. In order to prove state transitions, therefore, the state must be obtained from a source external to the actual blockchain---a data availability layer. While the data could be sourced elsewhere (e.g. directly from the user interacting with an application), for the purposes of a messaging system, whose raison d'\^{e}tre data transmission from one party to another, the data availability infrastructure is not an improvement over the relatively simpler approach of a platform like Ethereum.
+
+We attempt to combine some fundamental traditional cryptographic techniques with the modern blockchain technology to create a privacy-first messaging protocol that is resistant to surveillance and censorship.
+
+\section{Definitions}\label{definitions}
+
+The goal of this paper is to build upon the work of previous protocols to hide even more metadata about conversations. In particular, we will hide the following information, in addition to hiding of the payload itself:
+
+\begin{itemize}
+\item
+  Sender's identity.
+\item
+  Sender's location (geographical and network).
+\item
+  Timestamp of transmission.
+\item
+  Receiver's identity.
+\item
+  Receiver's location (geographical and network).
+\item
+  Timestamp of receipt.
+\item
+  Payload size.
+\item
+  Conversation history.
+\end{itemize}
+
+However, privacy of these data is not sufficient to make a usable protocol. Therefore, we will also aim to fulfill the following properties that make the protocol usable:
+
+\begin{itemize}
+\item
+  Users can easily use the service across multiple devices, including message synchronization.
+\item
+  Group messaging is efficient and scalable.
+\item
+  The service is inexpensive to run as a server and as a user/client.
+\end{itemize}
