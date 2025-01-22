@@ -31,6 +31,74 @@ We propose a number of extensions to the protocol to enhance its usability and p
     \hyperref[dandelion-style-routing]{\textbf{Dandelion-style routing:}} A user can send messages to the message repository through a series of hops, making it difficult for an observer to determine the origin of the message. This extension is useful for reducing the likelihood that encountering a rogue proxy will compromise the user's privacy.
 \end{itemize}
 
+\begin{figure}[h!]
+    \centering
+    \begin{tikzpicture}[
+        node distance=1.5cm,
+        description/.style={align=left},
+        message/.style={rectangle,draw,solid,fill=gray!30,minimum width=30mm,minimum height=8mm},
+        private/.style={rectangle,draw,solid,fill=gray!30,minimum width=12mm,minimum height=8mm},
+        public/.style={rectangle,draw,solid,fill=white,minimum width=12mm,minimum height=8mm},
+        user/.style={rectangle,draw,dotted,fill=gray!10,inner sep=10pt},
+        enveloped/.style={rectangle,fill=white,draw,solid,double=gray!10,double distance=.5mm}
+    ]
+
+    % Add legend
+    % \node[description] at (-4,6) {
+    %     \begin{tabular}{l l}
+    %         \raisebox{-1ex}{\tikz\node[private,minimum width=8mm] {};} & Private elements \\[0.5ex]
+    %         \raisebox{-1ex}{\tikz\node[public,minimum width=8mm] {};} & Public elements
+    %     \end{tabular}
+    % };
+
+    \node[user] (user) {
+        \begin{tikzpicture}[node distance=1cm]
+            \node[message] (message) {$m$};
+
+            \node[private] (chunk1) at ($(message)+(-1,-2)$) {$m_1$};
+            \node[private] (chunk2) at ($(message)+(1,-2)$) {$m_2$};
+            \node at ($(chunk2)+(1.5,0)$) {$\cdots$};
+            \draw[->,solid] (message) -- (chunk1);
+            \draw[->,solid] (message) -- (chunk2) node[midway,right] {\textit{Chunking}};
+
+            \node[private] (index) at ($(chunk1)+(-4.5,0)$) {$n$};
+            \node[private] (identifier) at ($(index)+(+2,0)$) {$i_{\{S,R\}}$};
+            \node[private] (key) at ($(identifier)+(0,2)$) {$k_{\{S,R\}}$};
+
+            \node[public] (encrypted1) at ($(chunk1)+(0,-2)$) {$c^n$};
+            \draw[->,solid] (chunk1) -- (encrypted1) node[midway,right] {\textit{Encryption}};
+            \draw[->,solid] (key) -- (encrypted1);
+            \node at ($(encrypted1)+(1.5,0)$) {$\cdots$};
+
+            \node[public] (hash) at ($(index)+(0,-2)$) {$h^n$};
+            \draw[->,solid] (index) -- (hash) node[midway,left] {$H(i_{\{S,R\}}, n)$};
+            \draw[->,solid] (identifier) -- (hash);
+            \draw[->,solid] (key) -- (identifier) node[midway,left] {$H(k_{\{S,R\}}, v_S \concat v_R)$};
+
+            \node[public] (proof) at ($(hash)+(2,-2)$) {$\pi^n$};
+            \draw[->,solid] (key) .. controls +(3,-2) and +(0,1) .. (proof);
+            \draw[->,solid] (hash) -- (proof) node[midway,left] {\textit{Proof generation}};
+            \draw[->,solid] (encrypted1) -- (proof);
+
+            \node[rectangle,draw=black,dotted,rounded corners=2em,minimum width=4cm,minimum height=2cm] (network) at ($(proof)+(+5,-1)$) {Proxy network};
+
+            \node[enveloped] (onionpayload) at ($(proof)+(0,-2)$) {$(h^n, c^n, \pi^n)$};
+            \draw[->,solid] (hash) -- (onionpayload);
+            \draw[->,solid] (proof) -- (onionpayload) node[midway,left] {\textit{Layered routing encryption}};
+            \draw[->,solid] (encrypted1) -- (onionpayload);
+            \draw[->,solid] (network.west) .. controls +(-2,0) .. ($(onionpayload.north)+(.5,0)$);
+
+            \draw[->,solid] (onionpayload) .. controls +(0,-2) and +(-1,-2) .. (network) node[midway,right] {\textit{Publish}};
+
+            \node[above right] at (current bounding box.north west) {User};
+        \end{tikzpicture}
+    };
+
+    \end{tikzpicture}
+    \caption{Message chunking, encryption, sequence hash generation, proving, and proxy routing.}
+    \label{fig:message_preparation}
+\end{figure}
+
 \section{Channels}\label{channels}
 
 Consider a channel with members Sender Steve and Receiver Robin $\mathcal{C}_{\{S,R\}}$, where the public keys $v_S$ and $v_R$ are mutually known. Using Diffie-Hellman or any other method of establishing a shared secret, Steve and Robin can establish a shared secret $k_{\{S,R\}} = \operatorname{Diffie-Hellman}(S, R)$. In combination with other, optional, static metadata, a similarly secret channel identifier $i_{\{S,R\}}$ can be derived. An example of this process is demonstrated below:
@@ -222,7 +290,7 @@ def verify(
 
 Sender Steve will be responsible for generating a proof by constructing a set of public and private inputs which satisfy the circuit. In the case of the circuit pseudocode in the listing above, Steve would be responsible for providing public inputs of the sequence hash $h_{\{S,R\}}^n$ and ciphertext $c^n$, as well as the private inputs of the shared secret $k_{\{S,R\}}$, the rest of the information required to compute the sequence hash (such as the message index $n$), and the cleartext of the message. Since these latter items are part of the private inputs, they will not be revealed in the proof that is generated.
 
-Upon constructing this proof, Sender Steve packages the three items---sequence hash, ciphertext, and proof: $(h_{\{S,R\}}^n, c^n, p^n)$---all together and sends them off to the message distributor (either directly to the message repository, or to the proxy if that service is in effect).
+Upon constructing this proof, Sender Steve packages the three items---sequence hash, ciphertext, and proof: $(h_{\{S,R\}}^n, c^n, \pi^n)$---all together and sends them off to the message distributor (either directly to the message repository, or to the proxy if that service is in effect).
 
 When the message repository receives this triplet, it first verifies the proof with the well-known circuit and the provided sequence hash and ciphertext. If the proof can be successfully verified, only then does the message repository write the ciphertext into its key-value store.
 
