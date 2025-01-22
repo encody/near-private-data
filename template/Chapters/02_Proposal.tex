@@ -14,6 +14,23 @@ Using a series of abstractions, the channel construct can be composed in a numbe
 
 Of particular interest is $N \leftrightarrow N$ messaging. If all members of a particular group share the same secret, they can all generate the same sequence of hashes, and decrypt all of the messages in the channel. This allows for posting a single message, encrypted with the shared secret, to the public message repository, and all of the members of the group will be able to read it, regardless of the number of members in the group. Thus, we have $O(1)$ space complexity for broadcast transmissions.
 
+\subsection{Extensions}\label{extensions}
+
+We propose a number of extensions to the protocol to enhance its usability and privacy:
+
+\begin{itemize}
+\item
+    \hyperref[garbage-messages]{\textbf{Garbage messages:}} A user can send messages to a channel that are indistinguishable from real messages. This extension is useful for obfuscating the metadata of a user's communications. It is recommended that garbage messages be sent at a Poisson-distributed frequency.
+\item
+    \hyperref[payload-size]{\textbf{Payload size manipulation:}} The protocol enforces a regulated size for all messages. This extension is useful for obfuscating the metadata of a user's communications by reducing the information that can be gleaned from the size of the payload.
+\item
+    \hyperref[message-notifications]{\textbf{Message notifications:}} A user can download a single payload which can be analyzed to determine with high probability whether any messages relevant to the user have been posted to the message repository. This extension has an $O(n)$ space complexity, where $n$ is the number of messages sent to the message repository.
+\item
+    \hyperref[proxies]{\textbf{Proxies:}} A user can send messages to a proxy service, which will then forward the messages to the message repository. This extension is useful for obfuscating the network activity of a user's communications by hiding the user's IP address from the message repository. If the message repository is hosted on a blockchain, this extension is also useful for concealing the user's blockchain identity, since all activity will be initiated by the proxy instead.
+\item
+    \hyperref[dandelion-style-routing]{\textbf{Dandelion-style routing:}} A user can send messages to the message repository through a series of hops, making it difficult for an observer to determine the origin of the message. This extension is useful for reducing the likelihood that encountering a rogue proxy will compromise the user's privacy.
+\end{itemize}
+
 \section{Channels}\label{channels}
 
 Consider a channel with members Sender Steve and Receiver Robin $\mathcal{C}_{\{S,R\}}$, where the public keys $v_S$ and $v_R$ are mutually known. Using Diffie-Hellman or any other method of establishing a shared secret, Steve and Robin can establish a shared secret $k_{\{S,R\}} = \operatorname{Diffie-Hellman}(S, R)$. In combination with other, optional, static metadata, a similarly secret channel identifier $i_{\{S,R\}}$ can be derived. An example of this process is demonstrated below:
@@ -248,7 +265,7 @@ Therefore, the protocol is in need of a feature to break (or at least obfuscate)
 
 When attempting to conceal the activity of network participants, many projects have adopted similar measures to that which we propose here: that of passing messages amongst multiple peers before delivering it to its final destination, and concealing the true origin in the process. Most prominently among such projects may be The Onion Router, more commonly known as Tor. Put simply, a user chooses a path through his peers and wraps his request in multiple layers of encryption which each subsequent peer in the path is able to decrypt. A similar proposal was made for the Bitcoin network \parencite{venkatakrishnan_dandelion_2017}, and a variation of it \parencite{fanti_dandelion_2018} was adopted by Monero in 2020 \parencite{erciccione_blog_2020}.
 
-Introducing this feature to our protocol requires the increase from a single proxy service to multiple, unaffiliated proxy services. ``Unaffiliated'' is an important qualifier: the proxy network members (relays) must have sufficiently disparate interests and controlling influences to ensure that they are not incentivized to cooperate with each other to reveal the payload paths throughout the network. \parencite{paganini_attacks_2014}
+Introducing this feature to our protocol requires the increase from a single proxy service to multiple, unaffiliated proxy services. ``Unaffiliated'' is an important qualifier: the proxy network members (relays) must have sufficiently disparate interests and controlling influences to ensure that they are not incentivized to cooperate with each other to reveal the payload paths throughout the network. \parencite{douceur_sybil_2002, paganini_attacks_2014}
 
 This feature is not without its downsides: not only does it add nontrivial amounts of complexity to the development and maintenance of the protocol---properly implementing the Dandelion-style routing is a significant up-front cost, and maintaining a large, decentralized network of routing proxies is a significant maintenance cost---it also adds a noticeable amount of latency to the message sending process. From a privacy perspective, this is not entirely bad, since high and highly-variable latency between dispatch and receipt by the message repository can reduce the correlations in network activity timings, but it has an exclusively negative impact on the user-friendliness of the protocol.
 
