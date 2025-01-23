@@ -14,6 +14,74 @@ Using a series of abstractions, the channel construct can be composed in a numbe
 
 Of particular interest is $N \leftrightarrow N$ messaging. If all members of a particular group share the same secret, they can all generate the same sequence of hashes, and decrypt all of the messages in the channel. This allows for posting a single message, encrypted with the shared secret, to the public message repository, and all of the members of the group will be able to read it, regardless of the number of members in the group. Thus, we have $O(1)$ space complexity for broadcast transmissions.
 
+\begin{figure}[h]
+    \centering
+    \begin{tikzpicture}[
+        node distance=1.5cm,
+        description/.style={align=left},
+        message/.style={rectangle,draw,solid,fill=gray!30,minimum width=30mm,minimum height=8mm},
+        private/.style={rectangle,draw,solid,fill=gray!30,minimum width=12mm,minimum height=8mm},
+        public/.style={rectangle,draw,solid,fill=white,minimum width=12mm,minimum height=8mm},
+        user/.style={rectangle,draw,dotted,fill=gray!10,inner sep=10pt},
+        enveloped/.style={rectangle,fill=white,draw,solid,double=gray!10,double distance=.5mm}
+    ]
+
+    % Add legend
+    \node[description] (legend) {
+        \begin{tabular}{l l}
+            \raisebox{-1ex}{\tikz\node[private,minimum width=8mm] {};} & Non-public data \\[0.5ex]
+            \raisebox{-1ex}{\tikz\node[public,minimum width=8mm] {};} & (Eventually) public data
+        \end{tabular}
+    };
+
+    \node[user] (user) at ($(legend)+(0,-7.5)$) {
+        \begin{tikzpicture}[node distance=1cm]
+            \node[message] (message) {$m$};
+
+            \node[private] (chunk1) at ($(message)+(-1,-2)$) {$m_1$};
+            \node[private] (chunk2) at ($(message)+(1,-2)$) {$m_2$};
+            \node at ($(chunk2)+(1.5,0)$) {$\cdots$};
+            \draw[->,solid] (message) -- (chunk1);
+            \draw[->,solid] (message) -- (chunk2) node[midway,right] {\textit{Chunking}};
+
+            \node[private] (index) at ($(chunk1)+(-4.5,0)$) {$n$};
+            \node[private] (identifier) at ($(index)+(+2,0)$) {$i_{\{S,R\}}$};
+            \node[private] (key) at ($(identifier)+(0,2)$) {$k_{\{S,R\}}$};
+
+            \node[public] (encrypted1) at ($(chunk1)+(0,-2)$) {$c^n$};
+            \draw[->,solid] (chunk1) -- (encrypted1) node[midway,right] {\textit{Encryption}};
+            \draw[->,solid] (key.south east) -- (encrypted1);
+            \node at ($(encrypted1)+(1.5,0)$) {$\cdots$};
+
+            \node[public] (hash) at ($(index)+(0,-2)$) {$h^n$};
+            \draw[->,solid] (index) -- (hash) node[midway,left] {$H(i_{\{S,R\}}, n)$};
+            \draw[->,solid] (identifier) -- (hash);
+            \draw[->,solid] (key) -- (identifier) node[midway,left] {$H(k_{\{S,R\}}, v_S \concat v_R)$};
+
+            \node[public] (proof) at ($(hash)+(2,-2)$) {$\pi^n$};
+            \draw[->,solid] ($(key.south west)!0.85!(key.south east)$) .. controls +(1.4,-2) and +(0,1) .. (proof);
+            \draw[->,solid] (hash) -- (proof) node[midway,left=5mm] {\textit{Proof generation}};
+            \draw[->,solid] (encrypted1) -- (proof);
+
+            \node[rectangle,draw=black,dotted,rounded corners=2em,minimum width=4cm,minimum height=2cm] (network) at ($(proof)+(+5,-1)$) {Proxy network};
+
+            \node[enveloped] (onionpayload) at ($(proof)+(0,-2)$) {$(h^n, c^n, \pi^n)$};
+            \draw[->,solid] (hash) -- (onionpayload);
+            \draw[->,solid] (proof) -- (onionpayload) node[midway,left=5mm] {\textit{Routing encryption}};
+            \draw[->,solid] (encrypted1) -- (onionpayload);
+            \draw[->,solid] (network.west) .. controls +(-2,0) .. ($(onionpayload.north)+(.5,0)$);
+
+            \draw[->,solid] (onionpayload) .. controls +(0,-2) and +(-1,-2) .. (network) node[midway,right,yshift=-3mm] {\textit{Publish}};
+
+            \node[above right] at (current bounding box.north west) {User};
+        \end{tikzpicture}
+    };
+
+    \end{tikzpicture}
+    \caption{User actions: Message chunking, encryption, sequence hash generation, proving, and proxy routing.}
+    \label{fig:message_preparation}
+\end{figure}
+
 \subsection{Extensions}\label{extensions}
 
 We propose a number of extensions to the protocol to enhance its usability and privacy:
@@ -30,74 +98,6 @@ We propose a number of extensions to the protocol to enhance its usability and p
 \item
     \hyperref[dandelion-style-routing]{\textbf{Dandelion-style routing:}} A user can send messages to the message repository through a series of hops, making it difficult for an observer to determine the origin of the message. This extension is useful for reducing the likelihood that encountering a rogue proxy will compromise the user's privacy.
 \end{itemize}
-
-\begin{figure}[h!]
-    \centering
-    \begin{tikzpicture}[
-        node distance=1.5cm,
-        description/.style={align=left},
-        message/.style={rectangle,draw,solid,fill=gray!30,minimum width=30mm,minimum height=8mm},
-        private/.style={rectangle,draw,solid,fill=gray!30,minimum width=12mm,minimum height=8mm},
-        public/.style={rectangle,draw,solid,fill=white,minimum width=12mm,minimum height=8mm},
-        user/.style={rectangle,draw,dotted,fill=gray!10,inner sep=10pt},
-        enveloped/.style={rectangle,fill=white,draw,solid,double=gray!10,double distance=.5mm}
-    ]
-
-    % Add legend
-    % \node[description] at (-4,6) {
-    %     \begin{tabular}{l l}
-    %         \raisebox{-1ex}{\tikz\node[private,minimum width=8mm] {};} & Private elements \\[0.5ex]
-    %         \raisebox{-1ex}{\tikz\node[public,minimum width=8mm] {};} & Public elements
-    %     \end{tabular}
-    % };
-
-    \node[user] (user) {
-        \begin{tikzpicture}[node distance=1cm]
-            \node[message] (message) {$m$};
-
-            \node[private] (chunk1) at ($(message)+(-1,-2)$) {$m_1$};
-            \node[private] (chunk2) at ($(message)+(1,-2)$) {$m_2$};
-            \node at ($(chunk2)+(1.5,0)$) {$\cdots$};
-            \draw[->,solid] (message) -- (chunk1);
-            \draw[->,solid] (message) -- (chunk2) node[midway,right] {\textit{Chunking}};
-
-            \node[private] (index) at ($(chunk1)+(-4.5,0)$) {$n$};
-            \node[private] (identifier) at ($(index)+(+2,0)$) {$i_{\{S,R\}}$};
-            \node[private] (key) at ($(identifier)+(0,2)$) {$k_{\{S,R\}}$};
-
-            \node[public] (encrypted1) at ($(chunk1)+(0,-2)$) {$c^n$};
-            \draw[->,solid] (chunk1) -- (encrypted1) node[midway,right] {\textit{Encryption}};
-            \draw[->,solid] (key) -- (encrypted1);
-            \node at ($(encrypted1)+(1.5,0)$) {$\cdots$};
-
-            \node[public] (hash) at ($(index)+(0,-2)$) {$h^n$};
-            \draw[->,solid] (index) -- (hash) node[midway,left] {$H(i_{\{S,R\}}, n)$};
-            \draw[->,solid] (identifier) -- (hash);
-            \draw[->,solid] (key) -- (identifier) node[midway,left] {$H(k_{\{S,R\}}, v_S \concat v_R)$};
-
-            \node[public] (proof) at ($(hash)+(2,-2)$) {$\pi^n$};
-            \draw[->,solid] (key) .. controls +(3,-2) and +(0,1) .. (proof);
-            \draw[->,solid] (hash) -- (proof) node[midway,left] {\textit{Proof generation}};
-            \draw[->,solid] (encrypted1) -- (proof);
-
-            \node[rectangle,draw=black,dotted,rounded corners=2em,minimum width=4cm,minimum height=2cm] (network) at ($(proof)+(+5,-1)$) {Proxy network};
-
-            \node[enveloped] (onionpayload) at ($(proof)+(0,-2)$) {$(h^n, c^n, \pi^n)$};
-            \draw[->,solid] (hash) -- (onionpayload);
-            \draw[->,solid] (proof) -- (onionpayload) node[midway,left] {\textit{Layered routing encryption}};
-            \draw[->,solid] (encrypted1) -- (onionpayload);
-            \draw[->,solid] (network.west) .. controls +(-2,0) .. ($(onionpayload.north)+(.5,0)$);
-
-            \draw[->,solid] (onionpayload) .. controls +(0,-2) and +(-1,-2) .. (network) node[midway,right] {\textit{Publish}};
-
-            \node[above right] at (current bounding box.north west) {User};
-        \end{tikzpicture}
-    };
-
-    \end{tikzpicture}
-    \caption{Message chunking, encryption, sequence hash generation, proving, and proxy routing.}
-    \label{fig:message_preparation}
-\end{figure}
 
 \section{Channels}\label{channels}
 
