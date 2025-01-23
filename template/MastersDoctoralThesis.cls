@@ -247,7 +247,8 @@
 
 \usepackage{xcolor} % Required for specifying custom colours
 
-\colorlet{mdtRed}{red!50!black}
+\definecolor{scienceBlue}{cmyk}{1,.82,.08,.16}
+\definecolor{scienceBlueSub}{cmyk}{.49,.22,0,.07}
 
 %----------------------------------------------------------------------------------------
 %	MARGINS
@@ -410,7 +411,6 @@ KOMA-script documentation for details.}]{fancyhdr}
 %----------------------------------------------------------------------------------------
 
 \usepackage{xcolor}
-\colorlet{mdtRed}{red!50!black}
 \newcommand{\acknowledgementname}{Acknowledgements}
 \providecaptionname{american,australian,british,canadian,english,newzealand,UKenglish,USenglish} {\acknowledgementname}{Acknowledgements} % Acknowledgement text for English countries
 \providecaptionname{german,ngerman,austrian,naustrian}{\acknowledgementname}{Danksagung} % Acknowledgement text for Germanic countries
@@ -524,9 +524,9 @@ bookmarksopen=true,
 bookmarksopenlevel=0,
 hypertexnames=false,
 colorlinks=true,% Set to false to disable coloring links
-citecolor=magenta,% The color of citations
-linkcolor=red,% The color of references to document elements (sections, figures, etc)
-urlcolor=mdtRed,% The color of hyperlinks (URLs)
+citecolor=scienceBlue,% The color of citations
+linkcolor=scienceBlue,% The color of references to document elements (sections, figures, etc)
+urlcolor=scienceBlue,% The color of hyperlinks (URLs)
 pdfstartview={FitV},
 unicode,
 breaklinks=true,
