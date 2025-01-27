@@ -8,6 +8,7 @@
 *.run.xml
 *.synctex.gz
 *.toc
+*.pyg
 
 main-blx.bib
 _minted-main
