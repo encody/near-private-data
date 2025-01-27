@@ -22,9 +22,11 @@ Mina Protocol implements a general-purpose virtual machine by using recursive ze
 
 Decentralized blockchain platforms have many features that would be valuable in a private messenger: high availability, trustless security, and censorship-resistance. However, they also are non-ideal for a variety of reasons: speed, cost, and inherent tracability, implying ease of deanonymization. We largely do not attempt to address the first two disadvantages, since they are fundamental to the underlying blockchain, the judicious choice of which can be some mitigation. We attempt to combine some fundamental traditional cryptographic techniques with the modern blockchain technology to create a privacy-focused messaging protocol that is resistant to surveillance and censorship by using a blockchain protocol (or other infrastructure with similar properties) as the exclusive intermediary/distribution mechanism. While many of the techniques we use are not new, the combination of them in this context is novel.
 
+We call this protocol \textbf{Flexible Channels}.
+
 \section{Goals}\label{goals}
 
-The goal of this paper is to build upon the work of previous protocols to hide even more metadata about conversations. In particular, we will hide the following information, in addition to hiding of the payload itself:
+The goal of Flexible Channels is to build upon the work of previous protocols to hide even more metadata about conversations. In particular, we will hide the following information, in addition to hiding of the payload itself:
 
 \begin{itemize}
 \item

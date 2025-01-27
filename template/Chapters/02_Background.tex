@@ -1,0 +1,25 @@
+\chapter{Background}\label{background}
+
+As a prelude to the discussion of the protocol, we will first introduce some of the cryptographic primitives and techniques that are used in the protocol.
+
+\section{Public Key Cryptography and Blockchain Systems}\label{public-key-cryptography-and-blockchain-systems}
+
+Public key cryptography (also known as asymmetric cryptography) is a cryptographic system that uses pairs of keys: \emph{public keys} (also known as \emph{verify keys}), which may be disseminated widely, and \emph{private keys} (also known as \emph{secret keys}), which are known only to the owner. A user's public key may be used to identify the user, and the private key is used to decrypt or sign messages. The keys are related mathematically, but the private key cannot be feasibly derived from the public key.
+
+Public keys are distributed through \emph{public key infrastructure} (PKI) systems which provide a way to link public keys with their owners.
+
+Blockchain platforms use public key cryptography to secure transactions, ensuring that a transaction is actually from the person who claims to have sent it. State transitions in blockchain systems are built upon the concept of \emph{transactions}, which are not dissimilar from the identically-named concept in SQL databases, as they represent an set of state transitions which may only be fully applied or fully rejected (i.e. they are atomic).
+
+Blockchain transactions represent a set of interactions beginning from one account (an externally-owned account (EOA), called the \emph{sender} or \emph{predecessor}) to another account which may be externally-owned or an autonomous \emph{smart contract}. Smart contracts are on-chain entities which follow a set of logical rules designed by the contract's programmer. The contract's rules are enforced by the blockchain, and the contract's state is stored on the blockchain.
+
+\bigskip
+
+To a prospective messaging protocol designer, it appears as though much of the work is already done for us, as blockchain transactions already provide a secure, authenticated, and atomic method of transferring data from a sending account to a receiver. However, the public nature of blockchain transactions is a double-edged sword: while it is easy to verify that a transaction is valid and that the data has not been tampered with, it is also easy to see who is talking to whom, when, and how often. This is a significant privacy concern, as it can reveal a lot about a person's social network, habits, and interests.\footnote{Interestingly enough, the Ethereum blockchain has been used for highly, shall we say, \emph{sensitive} communications, for example, during high-profile hacks. \parencite{etherscanio_hackermessage_2023} However, this is a highly-specific case, and the message is neither encrypted nor even intended to be private.}
+
+\section{Hash Functions}\label{hash-functions}
+
+For the purposes of this paper, we define a \emph{hash function} as a pure function that takes an input (or \emph{preimage}) and returns a fixed-size string of bytes (the \emph{image}). This image can usually be thought of as a uniform-shaped ``fingerprint'' of sorts of the preimage.
+
+Hash functions are used in many applications, both cryptographic and non-cryptographic. For instance, the implementation one of the fundamental data structures in computer science, the hash table, uses hashing to map a key to a space in memory. While some uses of hash tables may certainly require more rigorous cryptographic guarantees, among the most basic of desirable properties in selecting a hash function for a hash table is high \emph{collision resistance}, that is, for it to be computationally infeasible to find two distinct preimage values producing the same image.
+
+In this paper, we also require that a hash function be \emph{one-way}, meaning it is computationally infeasible to generally derive a preimage that, when hashed, produces a given image. We also require that, given some preimage, it is computationally infeasible to find another preimage that hashes to the same image.
