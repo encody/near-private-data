@@ -23,3 +23,9 @@ For the purposes of this paper, we define a \emph{hash function} as a pure funct
 Hash functions are used in many applications, both cryptographic and non-cryptographic. For instance, the implementation one of the fundamental data structures in computer science, the hash table, uses hashing to map a key to a space in memory. While some uses of hash tables may certainly require more rigorous cryptographic guarantees, among the most basic of desirable properties in selecting a hash function for a hash table is high \emph{collision resistance}, that is, for it to be computationally infeasible to find two distinct preimage values producing the same image.
 
 In this paper, we also require that a hash function be \emph{one-way}, meaning it is computationally infeasible to generally derive a preimage that, when hashed, produces a given image. We also require that, given some preimage, it is computationally infeasible to find another preimage that hashes to the same image.
+
+\section{Zero-Knowledge Proofs}\label{zero-knowledge-proofs}
+
+A \emph{zero-knowledge proof} is a method by which one party (the \emph{prover}) can prove to another party (the \emph{verifier}) that they are in possession of some knowledge without revealing any information about that knowledge other than that the prover knows it. This is done by the prover convincing the verifier that the prover knows the value with high probability, but the verifier learns nothing about $x$ other than the fact that the prover knows it.
+
+Zero-knowledge proofs may be interactive (involving multiple rounds of communication between a prover and verifier) or non-interactive (involving only a single transmission from the prover to the verifier). For the purposes of this paper, we rely on non-interactive zero-knowledge proofs.
